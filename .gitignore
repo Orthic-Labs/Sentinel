@@ -1,0 +1,10 @@
+# Runtime state written by the reflect core (claims, evidence, checks, payloads).
+# Never commit: it contains project-specific excerpts and locators.
+.reflect/
+
+# Docs/source cache and telemetry (eval fixtures under eval/ stay tracked)
+.cache/
+
+node_modules/
+npm-debug.log*
+.DS_Store
