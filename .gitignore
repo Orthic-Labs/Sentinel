@@ -1,5 +1,7 @@
-# Runtime state written by the reflect core (claims, evidence, checks, payloads).
+# Runtime state written by the tether core (claims, evidence, checks, payloads).
 # Never commit: it contains project-specific excerpts and locators.
+.tether/
+# Pre-rename store directory, still ignored so old working copies stay clean.
 .reflect/
 
 # Docs/source cache and telemetry (eval fixtures under eval/ stay tracked)
