@@ -1,9 +1,28 @@
-# REFLECT v2 — Master Synthesis, Adjudication, and Implementation Guide
+# Tether v2 — Master Synthesis, Adjudication, and Implementation Guide
 
-> **REFLECT** — *Recursive Evidence Framework for Learning, Execution, Context and Thought*
-> Repository: <https://github.com/Orthic-Labs/reflect>
+> **Tether** — keep the agent tied to what is actually true.
+> Repository: <https://github.com/Orthic-Labs/Tether> · npm: `@orthic-labs/tether`
 >
-> The expansion is load-bearing, not a backronym dressing: **R**ecursive = bounded re-entry under retry budgets (D7/G5); **E**vidence = the durable unit, typed and hashed with invalidation keys (§4.4); **F**ramework = three layers, hooks first (§2); **L**earning = conditioned lessons and quarantined memory candidates (F9/F10); **E**xecution = deterministic checks with a non-model executor (D2); **C**ontext = governed and compact, payloads by reference (§4.8); **T**hought = native, private, never persisted as truth (A2/A3). Name credit: the `gptREFLECT_v3.md` research doc, which proposed the expansion; this document adopts it while refuting that doc's 13-stage protocol runtime (A8).
+> **On the name (settled 2026-07-26).** The design was synthesized under the name **REFLECT** —
+> *Recursive Evidence Framework for Learning, Execution, Context and Thought*, proposed by the
+> `gptREFLECT_v3.md` research doc. All seven mechanisms it names are still in the product:
+> **R**ecursive = bounded re-entry under retry budgets (D7/G5); **E**vidence = the durable unit, typed
+> and hashed with invalidation keys (§4.4); **F**ramework = three layers, hooks first (§2);
+> **L**earning = conditioned lessons and quarantined memory candidates (F9/F10); **E**xecution =
+> deterministic checks with a non-model executor (D2); **C**ontext = governed and compact, payloads by
+> reference (§4.8); **T**hought = native, private, never persisted as truth (A2/A3).
+>
+> The product was nonetheless renamed to **Tether**, for a reason this document itself supplies:
+> `reflect` names the mechanism the research *refutes*. Huang et al. (ICLR 2024, verified §1.5) show
+> that self-reflection without external grounding can degrade reasoning, and the Sol source doc warned
+> that the name `reflect` is only safe "if the tool description makes its role explicit" so a model does
+> not read it as *write a longer monologue*. A name that needs a disclaimer to prevent misuse is a name
+> fighting its product — and weak models, the actual market (§4.10), are exactly the ones that will
+> pattern-match it wrong. `Tether` names the mechanism that works: anchoring a claim to evidence and
+> constraining drift. The metaphor extends into the architecture — an **invalidation key is the tether
+> breaking when the anchor moves**. The acronym's own `T = Thought` mapped to the one thing the design
+> deliberately refuses to persist, which was the tell that it was a backronym rather than a description.
+> The adjudication tables below still write `reflect` where they quote the source research verbatim.
 
 **Date:** 2026-07-26 · **Revision 2** (same day, adversarial review applied)
 **Inputs:** 7 research documents (compiled by independent agents that did NOT see the current implementation) + the live implementation at `reflect/server.js` (v1.1.0-local) and `reflect/test.mjs` + **live citation verification performed this session (§1.5)**.

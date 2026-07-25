@@ -15,9 +15,9 @@ async function main(argv = process.argv.slice(2), inputText = readStdin()) {
   else if (command === 'show') value = core.show(input.run_id ?? input.runId ?? flags.run);
   else if (command === 'audit') value = core.audit();
   else if (command === 'purge') value = core.purge(input.run_id ?? input.runId ?? flags.run);
-  else if (command === 'reflect') value = core[input.operation ?? 'assess'](input, authority);
+  else if (command === 'tether') value = core[input.operation ?? 'assess'](input, authority);
   else if (['assess', 'checkpoint', 'verify', 'close'].includes(command)) value = core[command]({ ...input, ...(flags.gate ? { gate: flags.gate } : {}) }, authority);
-  else throw new Error(`Unknown reflect command: ${command}`);
+  else throw new Error(`Unknown tether command: ${command}`);
   const rendered = JSON.stringify(value);
   process.stdout.write(`${rendered}\n`);
   if (value.decision === 'blocked' || value.ok === false) process.exitCode = 1;
@@ -25,10 +25,10 @@ async function main(argv = process.argv.slice(2), inputText = readStdin()) {
 
 function parseArgs(argv) {
   const flags = {};
-  let command = 'reflect';
+  let command = 'tether';
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
-    if (!arg.startsWith('--') && command === 'reflect') { command = arg; continue; }
+    if (!arg.startsWith('--') && command === 'tether') { command = arg; continue; }
     if (arg === '--operator') { flags.operator = true; continue; }
     if (arg === '--json') { flags.json = true; continue; }
     const [key, inline] = arg.slice(2).split('=', 2);
@@ -43,6 +43,6 @@ function readStdin() {
 }
 
 main().catch((error) => {
-  process.stderr.write(`reflect-cli: ${error instanceof Error ? error.message : String(error)}\n`);
+  process.stderr.write(`tether-cli: ${error instanceof Error ? error.message : String(error)}\n`);
   process.exitCode = 1;
 });

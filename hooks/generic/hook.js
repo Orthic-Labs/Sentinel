@@ -7,7 +7,7 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
 const event = readJson();
-const root = process.env.REFLECT_ROOT ?? path.resolve(__dirname, '../..');
+const root = process.env.TETHER_ROOT ?? path.resolve(__dirname, '../..');
 const cli = path.join(root, 'cli.js');
 const name = event.hook_event_name ?? event.event ?? event.type ?? '';
 const runId = event.run_id;
@@ -15,7 +15,7 @@ const runId = event.run_id;
 // A host can emit lifecycle events before the model has assessed a task. Enforcement cannot
 // infer a run without inventing state, so those events are deliberately inert.
 if (!runId && ['Stop', 'stop', 'PreToolUse', 'pre_tool_use', 'PostToolUseFailure', 'post_tool_use_failure'].includes(name)) {
-  emit({ action: 'noop', reason: 'no active reflect run' });
+  emit({ action: 'noop', reason: 'no active tether run' });
   process.exit(0);
 }
 
@@ -58,7 +58,7 @@ emit({ action: 'noop', reason: 'unsupported or low-signal event' });
 function invoke(command, input) {
   const child = spawnSync(process.execPath, [cli, command, '--operator', '--json'], { input: JSON.stringify(input), encoding: 'utf8', windowsHide: true });
   if (child.error) return { decision: 'blocked', error: child.error.message };
-  try { return JSON.parse(child.stdout); } catch { return { decision: 'blocked', error: child.stderr || 'reflect-cli returned invalid JSON' }; }
+  try { return JSON.parse(child.stdout); } catch { return { decision: 'blocked', error: child.stderr || 'tether-cli returned invalid JSON' }; }
 }
 
 function isRisky(command) {
