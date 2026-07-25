@@ -3,7 +3,7 @@ name: reflect
 description: Use for material uncertainty, version-sensitive APIs, unexpected failures, repeated attempts, risky actions, memory proposals, context drift, and completion signoff. Skip routine one-step deterministic work.
 ---
 
-# Reflect
+# REFLECT — Recursive Evidence Framework for Learning, Execution, Context and Thought
 
 Never silently assume a material fact. Use `reflect assess` for task intake, `checkpoint` after
 failures or material changes, `docs` for dependency/API facts, `verify` for executable checks, and

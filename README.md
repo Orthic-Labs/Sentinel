@@ -1,9 +1,23 @@
-# Reflect
+# REFLECT
 
-Reflect is a local evidence-and-gate core for agents. It records claims, evidence, decisions, and
+**Recursive Evidence Framework for Learning, Execution, Context and Thought**
+
+REFLECT is a local evidence-and-gate core for agents. It records claims, evidence, decisions, and
 checks; it never persists private chain-of-thought. The enforcement hooks work without MCP or model
 cooperation, while the optional MCP server exposes two tools: `reflect` (`assess`, `checkpoint`,
 `verify`, `close`) and `docs`.
+
+The name is the architecture:
+
+| Letter | Element | In the system |
+|---|---|---|
+| **R**ecursive | bounded re-entry | checkpoints and gates re-enter on failure, under hard retry budgets — never an open loop |
+| **E**vidence | the durable unit | typed, hashed, locator-bearing records with invalidation keys |
+| **F**ramework | layers, not a prompt | enforcement hooks · guidance skill · state-and-docs core |
+| **L**earning | conditioned lessons | failure diagnosis and quarantined memory candidates, never auto-promoted |
+| **E**xecution | checks outrank opinion | deterministic test/build/typecheck results with a non-model executor |
+| **C**ontext | governed, not hoarded | compact state diffs; full payloads dereferenced on demand |
+| **T**hought | private and transient | native model reasoning stays the model's own; only decisions persist |
 
 ## Run
 

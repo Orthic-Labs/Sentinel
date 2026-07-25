@@ -1,8 +1,12 @@
 {
   "name": "@damned-designs/reflect",
   "version": "2.0.0",
-  "description": "Evidence-gated reflection, exact-version docs, and model-independent enforcement hooks.",
+  "description": "REFLECT — Recursive Evidence Framework for Learning, Execution, Context and Thought: evidence-gated reflection, exact-version docs, and model-independent enforcement hooks.",
   "license": "MIT",
+  "homepage": "https://github.com/Orthic-Labs/reflect#readme",
+  "repository": { "type": "git", "url": "git+https://github.com/Orthic-Labs/reflect.git" },
+  "bugs": { "url": "https://github.com/Orthic-Labs/reflect/issues" },
+  "keywords": ["mcp", "agent", "reflection", "verification", "evidence", "hooks", "context7", "sequential-thinking", "claude-code", "codex"],
   "type": "commonjs",
   "engines": { "node": ">=20" },
   "bin": { "reflect": "server.js", "reflect-cli": "cli.js" },
