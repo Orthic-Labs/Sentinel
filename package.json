@@ -1,0 +1,10 @@
+{
+  "name": "@damned-designs/reflect",
+  "version": "2.0.0",
+  "description": "Evidence-gated reflection, exact-version docs, and model-independent enforcement hooks.",
+  "license": "MIT",
+  "type": "commonjs",
+  "engines": { "node": ">=20" },
+  "bin": { "reflect": "server.js", "reflect-cli": "cli.js" },
+  "scripts": { "test": "node test.mjs && node test/v2.mjs", "mcp": "node server.js" }
+}

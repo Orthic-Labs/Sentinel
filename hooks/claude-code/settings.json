@@ -1,0 +1,7 @@
+{
+  "hooks": {
+    "PostToolUseFailure": [{ "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PROJECT_DIR}/hooks/generic/hook.js\"" }] }],
+    "PreToolUse": [{ "matcher": "Bash|Shell", "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PROJECT_DIR}/hooks/generic/hook.js\"" }] }],
+    "Stop": [{ "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PROJECT_DIR}/hooks/generic/hook.js\"" }] }]
+  }
+}

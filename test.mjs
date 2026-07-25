@@ -100,6 +100,7 @@ const child = spawn(process.execPath, [join(directory, 'server.js')], {
     CONTEXT7_MAX_BODY_BYTES: '20000',
     CONTEXT7_TIMEOUT_MS: '100',
     REFLECT_TELEMETRY_PATH: telemetryPath,
+    REFLECT_LEGACY_TOOLS: '1',
   },
   stdio: ['pipe', 'pipe', 'pipe'],
   windowsHide: true,
@@ -455,7 +456,7 @@ try {
   }
 
   const limitedChild = spawn(process.execPath, [join(directory, 'server.js')], {
-    env: { ...process.env, REFLECT_MAX_LINE_CHARS: '100', REFLECT_TELEMETRY_ENABLED: '0' },
+    env: { ...process.env, REFLECT_MAX_LINE_CHARS: '100', REFLECT_TELEMETRY_ENABLED: '0', REFLECT_LEGACY_TOOLS: '1' },
     stdio: ['pipe', 'pipe', 'pipe'],
     windowsHide: true,
   });
@@ -474,7 +475,7 @@ try {
   limitedChild.kill();
 
   const teardownChild = spawn(process.execPath, [join(directory, 'server.js')], {
-    env: { ...process.env, REFLECT_TELEMETRY_PATH: teardownTelemetryPath },
+    env: { ...process.env, REFLECT_TELEMETRY_PATH: teardownTelemetryPath, REFLECT_LEGACY_TOOLS: '1' },
     stdio: ['pipe', 'pipe', 'pipe'],
     windowsHide: true,
   });
@@ -500,7 +501,9 @@ try {
   }
   const teardownOutcome = await Promise.race([
     once(teardownChild, 'exit').then(([code]) => ({ code })),
-    new Promise((resolve) => setTimeout(() => resolve({ timeout: true }), 2_000)),
+    // The child is intentionally writing into a destroyed stdout pipe; allow slow shared CI
+    // teardown without changing the transport's clean-exit contract.
+    new Promise((resolve) => setTimeout(() => resolve({ timeout: true }), 5_000)),
   ]);
   if (teardownOutcome.timeout) {
     teardownChild.kill();
@@ -519,6 +522,7 @@ try {
       ...process.env,
       REFLECT_TELEMETRY_PATH: boundedTelemetryPath,
       REFLECT_TELEMETRY_MAX_BYTES: '1500',
+      REFLECT_LEGACY_TOOLS: '1',
     },
     stdio: ['pipe', 'pipe', 'pipe'],
     windowsHide: true,
@@ -582,7 +586,7 @@ try {
     require(${JSON.stringify(join(directory, 'server.js'))});
   `;
   const backpressureChild = spawn(process.execPath, ['-e', backpressurePreload], {
-    env: { ...process.env, REFLECT_TELEMETRY_ENABLED: '0' },
+    env: { ...process.env, REFLECT_TELEMETRY_ENABLED: '0', REFLECT_LEGACY_TOOLS: '1' },
     stdio: ['pipe', 'pipe', 'pipe'],
     windowsHide: true,
   });
@@ -626,6 +630,7 @@ try {
       CONTEXT7_API_BASE_URL: `http://127.0.0.1:${address.port}/api/v2`,
       CONTEXT7_MAX_CONCURRENT_REQUESTS: '1',
       REFLECT_TELEMETRY_ENABLED: '0',
+      REFLECT_LEGACY_TOOLS: '1',
     },
     stdio: ['pipe', 'pipe', 'pipe'],
     windowsHide: true,

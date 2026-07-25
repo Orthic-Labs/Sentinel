@@ -1,0 +1,6 @@
+{
+  "default": { "min_evidence": { "repo": 1, "logs_or_docs": 1 }, "min_passing_checks": 1, "require_gate_for": ["signoff"] },
+  "bugfix": { "min_evidence": { "repo": 1, "logs_or_docs": 1 }, "min_passing_checks": 1, "require_gate_for": ["signoff", "high_risk"] },
+  "feature": { "min_evidence": { "repo": 1, "logs_or_docs": 1 }, "min_passing_checks": 1, "require_gate_for": ["signoff"] },
+  "release": { "min_evidence": { "repo": 1, "logs_or_docs": 1 }, "min_passing_checks": 2, "require_gate_for": ["signoff", "high_risk"] }
+}
