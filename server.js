@@ -1266,8 +1266,8 @@ function resolveTelemetryPath() {
     'tools',
     '.cache',
     'metrics',
-    'reflect',
-    `reflect-${stamp}-${process.pid}-${telemetrySessionId}.jsonl`,
+    'tether',
+    `tether-${stamp}-${process.pid}-${telemetrySessionId}.jsonl`,
   );
 }
 
