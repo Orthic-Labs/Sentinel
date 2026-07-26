@@ -10,7 +10,17 @@ const event = readJson();
 const root = process.env.TETHER_ROOT ?? path.resolve(__dirname, '../..');
 const cli = path.join(root, 'cli.js');
 const name = event.hook_event_name ?? event.event ?? event.type ?? '';
-const runId = event.run_id;
+let runId = event.run_id;
+const sessionId = event.session_id ?? event.sessionId ?? process.env.CODEX_SESSION_ID ?? process.env.CLAUDE_SESSION_ID;
+
+if (!runId && sessionId) {
+  const binding = invoke('resolve-session', { session_id: sessionId });
+  runId = binding.run_id;
+  if (!runId) {
+    emit({ action: 'noop', reason: binding.status === 'ambiguous' ? 'ambiguous active tether runs' : 'no active tether run' });
+    process.exit(0);
+  }
+}
 
 // A host can emit lifecycle events before the model has assessed a task. Enforcement cannot
 // infer a run without inventing state, so those events are deliberately inert.
@@ -24,7 +34,10 @@ if (name === 'Stop' && (event.stop_hook_active === true || event.stopHookActive 
   process.exit(0);
 }
 
-if (name === 'PostToolUseFailure' || name === 'post_tool_use_failure') {
+const isFailureEvent = name === 'PostToolUseFailure' || name === 'post_tool_use_failure'
+  || ((name === 'PostToolUse' || name === 'post_tool_use') && Boolean(event.failure ?? event.error ?? event.tool_error));
+
+if (isFailureEvent) {
   const failure = event.failure ?? {};
   const fingerprint = failure.error_fingerprint ?? failure.fingerprint ?? crypto.createHash('sha256').update(JSON.stringify({ tool: event.tool_name, command: event.command, error: event.error })).digest('hex');
   const result = invoke('checkpoint', {

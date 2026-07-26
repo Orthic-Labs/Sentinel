@@ -13,6 +13,7 @@ async function main(argv = process.argv.slice(2), inputText = readStdin()) {
   let value;
   if (command === 'docs') value = resolveDocs({ ...input, path: input.path ?? flags.project }, { projectRoot: flags.project ?? process.cwd(), store: core.store });
   else if (command === 'show') value = core.show(input.run_id ?? input.runId ?? flags.run);
+  else if (command === 'resolve-session') value = core.resolveSession({ ...input, ...(flags.run ? { run_id: flags.run } : {}) });
   else if (command === 'audit') value = core.audit();
   else if (command === 'purge') value = core.purge(input.run_id ?? input.runId ?? flags.run);
   else if (command === 'tether') value = core[input.operation ?? 'assess'](input, authority);

@@ -3,6 +3,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync } from 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { ReflectCore } from '../lib/core.js';
 import { createStore } from '../lib/store.js';
 import { resolveDocs } from '../lib/docs.js';
@@ -19,6 +20,45 @@ const store = createStore(join(project, '.tether'));
 const core = new ReflectCore({ projectRoot: project, store });
 const assessed = core.assess({ summary: 'Fix client middleware', task_kind: 'feature', claims: [{ text: 'configure is the installed API', kind: 'versioned_api', materiality: 'critical' }] });
 assert.equal(assessed.decision, 'proceed');
+const sessionBinding = core.resolveSession({ session_id: 'claude-session-1' });
+assert.deepEqual(sessionBinding, { run_id: assessed.run_id, status: 'bound' });
+assert.equal(store.get('session_bindings', 'claude-session-1').run_id, assessed.run_id);
+const enforcedHook = spawnSync(process.execPath, [join(fileURLToPath(new URL('..', import.meta.url)), 'hooks', 'generic', 'hook.js')], {
+  cwd: project,
+  env: { ...process.env, TETHER_ROOT: fileURLToPath(new URL('..', import.meta.url)), TETHER_STORE_ROOT: join(project, '.tether') },
+  input: JSON.stringify({ hook_event_name: 'PreToolUse', session_id: 'claude-session-2', tool_input: { command: 'rm -rf build-output' } }),
+  encoding: 'utf8',
+  windowsHide: true,
+});
+assert.equal(enforcedHook.status, 1, enforcedHook.stderr);
+assert.equal(JSON.parse(enforcedHook.stdout).action, 'block');
+const failureHook = spawnSync(process.execPath, [join(fileURLToPath(new URL('..', import.meta.url)), 'hooks', 'generic', 'hook.js')], {
+  cwd: project,
+  env: { ...process.env, TETHER_ROOT: fileURLToPath(new URL('..', import.meta.url)), TETHER_STORE_ROOT: join(project, '.tether') },
+  input: JSON.stringify({ hook_event_name: 'PostToolUse', session_id: 'claude-session-3', tool_name: 'shell', error: 'command failed' }),
+  encoding: 'utf8',
+  windowsHide: true,
+});
+assert.equal(failureHook.status, 0, failureHook.stderr);
+assert.equal(JSON.parse(failureHook.stdout).action, 'continue');
+const codexHook = spawnSync(process.execPath, [join(fileURLToPath(new URL('..', import.meta.url)), 'hooks', 'codex', 'hook.js')], {
+  cwd: project,
+  env: { ...process.env, CODEX_SESSION_ID: 'codex-session-1', TETHER_STORE_ROOT: join(project, '.tether') },
+  input: JSON.stringify({ hook_event_name: 'PreToolUse', tool_input: { command: 'rm -rf build-output' } }),
+  encoding: 'utf8',
+  windowsHide: true,
+});
+assert.equal(codexHook.status, 0, codexHook.stderr);
+assert.equal(JSON.parse(codexHook.stdout).hookSpecificOutput.permissionDecision, 'deny');
+const claudeHook = spawnSync(process.execPath, [join(fileURLToPath(new URL('..', import.meta.url)), 'hooks', 'claude-code', 'hook.js')], {
+  cwd: project,
+  env: { ...process.env, CLAUDE_SESSION_ID: 'claude-session-4', TETHER_STORE_ROOT: join(project, '.tether') },
+  input: JSON.stringify({ hook_event_name: 'PreToolUse', tool_input: { command: 'rm -rf build-output' } }),
+  encoding: 'utf8',
+  windowsHide: true,
+});
+assert.equal(claudeHook.status, 0, claudeHook.stderr);
+assert.equal(JSON.parse(claudeHook.stdout).hookSpecificOutput.permissionDecision, 'deny');
 const claim = store.list('claims')[0];
 const blocked = core.checkpoint({ run_id: assessed.run_id, failure: { error_fingerprint: 'same-failure', observed_failure: 'bad result' } });
 assert.equal(blocked.decision, 'proceed_with_change');
@@ -67,7 +107,7 @@ assert.equal(core.close({ run_id: assessed.run_id }).idempotent, true);
 assert.ok(existsSync(join(project, '.tether', 'events.jsonl')));
 
 const cli = spawnSync(process.execPath, ['cli.js', 'assess', '--operator', '--json', '--store', join(root, 'cli-store')], {
-  cwd: new URL('..', import.meta.url).pathname, input: JSON.stringify({ summary: 'CLI smoke' }), encoding: 'utf8',
+  cwd: fileURLToPath(new URL('..', import.meta.url)), input: JSON.stringify({ summary: 'CLI smoke' }), encoding: 'utf8',
 });
 assert.equal(cli.status, 0, cli.stderr);
 assert.equal(JSON.parse(cli.stdout).decision, 'skip');
