@@ -1,10 +1,10 @@
 # Tether
 
-> **TL;DR:** Tether blocks AI agents from calling work “done” until important claims have source-backed evidence & required checks actually pass.
+> **TL;DR:** Tether stops AI agents signing off on source guesses or skipped tests: important claims need source-backed evidence & required checks must pass before work can close.
 
 Coding agents can sound certain after reading stale code, guessing an API or skipping a failed test.
-Tether adds a local evidence ledger plus enforcement gates. It turns “I think this is correct” into
-“here is claim, source hash, check result & policy that allowed signoff.”
+Tether adds a local evidence ledger plus enforcement gates, turning “I think this is correct” into a
+proof trail: claim, source hash, check result & policy that allowed signoff.
 
 It stores structured work state—not private chain-of-thought.
 
