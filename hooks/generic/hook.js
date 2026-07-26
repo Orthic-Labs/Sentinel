@@ -69,13 +69,13 @@ if (name === 'Stop' || name === 'stop') {
 emit({ action: 'noop', reason: 'unsupported or low-signal event' });
 
 function invoke(command, input) {
-  const child = spawnSync(process.execPath, [cli, command, '--operator', '--json'], { input: JSON.stringify(input), encoding: 'utf8', windowsHide: true });
+  const child = spawnSync(process.execPath, [cli, command, '--operator', '--json'], { input: JSON.stringify(input), encoding: 'utf8', windowsHide: true, env: { ...process.env, TETHER_TRUSTED_CALLER: 'hook' } });
   if (child.error) return { decision: 'blocked', error: child.error.message };
   try { return JSON.parse(child.stdout); } catch { return { decision: 'blocked', error: child.stderr || 'tether-cli returned invalid JSON' }; }
 }
 
 function isRisky(command) {
-  return /\brm\s+-rf\b|git\s+push\s+.*--force|drop\s+(database|table)|\bcurl\b[^\n|]*\|\s*(sh|bash)|wrangler\s+(deploy|delete)|terraform\s+(apply|destroy)/i.test(command);
+  return /\brm\s+-(?:[^\s-]*r[^\s-]*f|[^\s-]*f[^\s-]*r)\b|git\s+push\b[^\n]*(?:--force(?:-with-lease)?|-f\b)|drop\s+(database|table)|\bcurl\b[^\n|]*\|\s*(sh|bash)|wrangler\s+(deploy|delete)|terraform\s+(apply|destroy)/i.test(command);
 }
 
 function readJson() { try { return JSON.parse(fs.readFileSync(0, 'utf8')); } catch { return {}; } }

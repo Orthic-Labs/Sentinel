@@ -8,6 +8,7 @@ const { resolveDocs } = require('./lib/docs');
 async function main(argv = process.argv.slice(2), inputText = readStdin()) {
   const { command, flags } = parseArgs(argv);
   const input = inputText ? JSON.parse(inputText) : {};
+  if (flags.operator && process.env.TETHER_TRUSTED_CALLER !== 'hook') throw new Error('--operator requires trusted host caller');
   const authority = flags.operator ? 'operator' : 'model';
   const core = new ReflectCore({ authority, projectRoot: flags.project ?? process.cwd(), storeRoot: flags.store });
   let value;

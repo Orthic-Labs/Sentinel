@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -89,13 +89,13 @@ const mismatched = core.checkpoint({
 assert.equal(store.list('evidence').find((row) => row.excerpt === 'this text is not in the manifest').attestation_reason, 'excerpt_not_in_source');
 assert.equal(mismatched.decision, 'proceed_with_change');
 // Unattested evidence alone must leave the signoff gate closed.
-core.verify({ run_id: assessed.run_id, checks: [{ kind: 'test', specification: 'v2 smoke', executor: 'host', status: 'passed', output: 'ok' }] });
+core.verify({ run_id: assessed.run_id, checks: [{ kind: 'test', specification: 'v2 smoke', executor: 'host', status: 'passed', output: 'ok' }] }, 'operator');
 const blockedClose = core.close({ run_id: assessed.run_id });
 assert.equal(blockedClose.decision, 'blocked');
 assert.ok(blockedClose.gate.deficits.some((deficit) => deficit.code === 'insufficient_repo_evidence'));
 
 // Real evidence: the locator resolves, the excerpt is present, so the core hashes the source itself.
-core.checkpoint({ run_id: assessed.run_id, claim_updates: [{ id: claim.id, status: 'supported' }], evidence: [{ kind: 'docs', trust_class: 'tool', excerpt: 'installed source supports configure' }, { kind: 'repo', trust_class: 'tool', locator: 'package.json', excerpt: 'demo-lib' }] });
+core.checkpoint({ run_id: assessed.run_id, claim_updates: [{ id: claim.id, status: 'supported' }], evidence: [{ kind: 'docs', trust_class: 'tool', claim_ids: [claim.id], excerpt: 'installed source supports configure' }, { kind: 'repo', trust_class: 'tool', claim_ids: [claim.id], locator: 'package.json', excerpt: 'demo-lib' }] });
 const attested = store.list('evidence').find((row) => row.attested === true);
 assert.equal(attested.attestation_reason, 'verified_against_source');
 assert.match(attested.content_hash, /^sha256:[0-9a-f]{64}$/);
@@ -105,9 +105,74 @@ const closed = core.close({ run_id: assessed.run_id });
 assert.equal(closed.decision, 'closed');
 assert.equal(core.close({ run_id: assessed.run_id }).idempotent, true);
 assert.ok(existsSync(join(project, '.tether', 'events.jsonl')));
+assert.throws(() => core.checkpoint({ run_id: assessed.run_id, evidence: [{ kind: 'docs', trust_class: 'tool', excerpt: 'late mutation' }] }), /closed run/);
 
+const spoofed = core.assess({ summary: 'Reject spoofed check', task_kind: 'feature', claims: [{ id: 'spoofed-claim', text: 'package is present', kind: 'local_fact', materiality: 'critical' }] });
+core.checkpoint({ run_id: spoofed.run_id, claim_updates: [{ id: 'spoofed-claim', status: 'supported' }], evidence: [{ kind: 'docs', trust_class: 'tool', claim_ids: ['spoofed-claim'], excerpt: 'package docs exist' }, { kind: 'repo', trust_class: 'tool', claim_ids: ['spoofed-claim'], locator: 'package.json', excerpt: 'demo-lib' }] });
+core.verify({ run_id: spoofed.run_id, checks: [{ kind: 'test', specification: 'spoofed', executor: 'host', status: 'passed', output: 'model said ok' }] }, 'model');
+const spoofedClose = core.close({ run_id: spoofed.run_id });
+assert.equal(spoofedClose.decision, 'blocked');
+assert.ok(spoofedClose.gate.deficits.some((deficit) => deficit.code === 'insufficient_passing_checks'));
+
+const unlinked = core.assess({ summary: 'Reject unlinked evidence', task_kind: 'feature', claims: [{ id: 'unlinked-claim', text: 'claim needs its own proof', kind: 'local_fact', materiality: 'critical' }] });
+core.checkpoint({ run_id: unlinked.run_id, claim_updates: [{ id: 'unlinked-claim', status: 'supported' }], evidence: [{ kind: 'docs', trust_class: 'tool', excerpt: 'generic docs exist' }, { kind: 'repo', trust_class: 'tool', locator: 'package.json', excerpt: 'demo-lib' }] });
+core.verify({ run_id: unlinked.run_id, checks: [{ kind: 'test', specification: 'real', executor: 'host', status: 'passed', output: 'ok' }] }, 'operator');
+const unlinkedClose = core.close({ run_id: unlinked.run_id });
+assert.equal(unlinkedClose.decision, 'blocked');
+assert.ok(unlinkedClose.gate.deficits.some((deficit) => deficit.code === 'supported_claim_without_evidence'));
+
+const liveFile = join(project, 'live.js');
+writeFileSync(liveFile, 'export const value = "before";\n');
+const stale = core.assess({ summary: 'Reject stale source evidence', task_kind: 'feature', claims: [{ id: 'stale-claim', text: 'live value is before', kind: 'local_fact', materiality: 'critical' }] });
+core.checkpoint({ run_id: stale.run_id, claim_updates: [{ id: 'stale-claim', status: 'supported' }], evidence: [{ kind: 'docs', trust_class: 'tool', claim_ids: ['stale-claim'], excerpt: 'runtime docs exist' }, { kind: 'repo', trust_class: 'tool', claim_ids: ['stale-claim'], locator: 'live.js', excerpt: 'before' }] });
+core.verify({ run_id: stale.run_id, checks: [{ kind: 'test', specification: 'real', executor: 'host', status: 'passed', output: 'ok' }] }, 'operator');
+writeFileSync(liveFile, 'export const value = "after";\n');
+const staleClose = core.close({ run_id: stale.run_id });
+assert.equal(staleClose.decision, 'blocked');
+assert.ok(staleClose.gate.deficits.some((deficit) => deficit.code === 'stale_evidence'));
+
+const waiverRun = core.assess({ summary: 'Reject model waiver', claims: [{ id: 'waiver-claim', text: 'cannot self waive', kind: 'hypothesis', materiality: 'critical' }] });
+assert.throws(() => core.checkpoint({ run_id: waiverRun.run_id, claim_updates: [{ id: 'waiver-claim', status: 'waived', waiver: { reason: 'model says so' } }] }), /model authority cannot waive/);
+assert.throws(() => core.checkpoint({ run_id: waiverRun.run_id, claim_updates: [{ id: 'waiver-claim', materiality: 'trivial' }] }), /cannot change claim materiality/);
+
+const outside = join(root, 'outside.txt');
+writeFileSync(outside, 'outside secret\n');
+symlinkSync(outside, join(project, 'outside-link.txt'));
+const linkRun = core.assess({ summary: 'Reject symlink escape', claims: [{ id: 'link-claim', text: 'link is local', kind: 'local_fact', materiality: 'critical' }] });
+core.checkpoint({ run_id: linkRun.run_id, evidence: [{ kind: 'repo', trust_class: 'tool', claim_ids: ['link-claim'], locator: 'outside-link.txt', excerpt: 'outside secret' }] });
+const linkedEvidence = store.list('evidence').find((row) => row.locator === 'outside-link.txt');
+assert.equal(linkedEvidence.attested, false);
+assert.equal(linkedEvidence.attestation_reason, 'outside_workspace');
+
+assert.throws(() => core.assess({ run_id: assessed.run_id, summary: 'replay old proof' }), /run_id already exists/);
+const purgeA = core.assess({ run_id: 'purge-a', summary: 'purge a' });
+const purgeB = core.assess({ run_id: 'purge-b', summary: 'purge b' });
+core.purge(purgeA.run_id);
+assert.equal(store.get('runs', purgeA.run_id), null);
+assert.equal(store.get('runs', purgeB.run_id).summary, 'purge b');
+
+writeFileSync(join(project, 'node_modules', 'demo-lib', 'MORE.md'), 'configure alpha\nconfigure beta\nconfigure gamma\n');
+const firstDocsPage = resolveDocs({ library: 'demo-lib', query: 'configure', path: project, limit: 1 }, { projectRoot: project, store });
+const secondDocsPage = resolveDocs({ continuationToken: firstDocsPage.continuationToken, path: project, limit: 1 }, { projectRoot: project, store });
+assert.notEqual(secondDocsPage.items[0].locator, firstDocsPage.items[0].locator);
+
+const riskyHook = spawnSync(process.execPath, [join(fileURLToPath(new URL('..', import.meta.url)), 'hooks', 'generic', 'hook.js')], {
+  cwd: project,
+  env: { ...process.env, TETHER_ROOT: fileURLToPath(new URL('..', import.meta.url)), TETHER_STORE_ROOT: join(project, '.tether') },
+  input: JSON.stringify({ hook_event_name: 'PreToolUse', run_id: waiverRun.run_id, tool_input: { command: 'git push -f origin main' } }),
+  encoding: 'utf8',
+  windowsHide: true,
+});
+assert.equal(riskyHook.status, 1, riskyHook.stderr);
+assert.equal(JSON.parse(riskyHook.stdout).action, 'block');
+
+const rejectedOperator = spawnSync(process.execPath, ['cli.js', 'assess', '--operator', '--json', '--store', join(root, 'cli-store-rejected')], {
+  cwd: fileURLToPath(new URL('..', import.meta.url)), input: JSON.stringify({ summary: 'CLI operator spoof' }), encoding: 'utf8',
+});
+assert.equal(rejectedOperator.status, 1);
+assert.match(rejectedOperator.stderr, /trusted host caller/);
 const cli = spawnSync(process.execPath, ['cli.js', 'assess', '--operator', '--json', '--store', join(root, 'cli-store')], {
-  cwd: fileURLToPath(new URL('..', import.meta.url)), input: JSON.stringify({ summary: 'CLI smoke' }), encoding: 'utf8',
+  cwd: fileURLToPath(new URL('..', import.meta.url)), env: { ...process.env, TETHER_TRUSTED_CALLER: 'hook' }, input: JSON.stringify({ summary: 'CLI smoke' }), encoding: 'utf8',
 });
 assert.equal(cli.status, 0, cli.stderr);
 assert.equal(JSON.parse(cli.stdout).decision, 'skip');
