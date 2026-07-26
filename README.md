@@ -207,3 +207,7 @@ Current limits:
 
 Full design history & adjudication: [`TETHER-MASTER.md`](TETHER-MASTER.md).
 Integration coverage: [`docs/integration-matrix.md`](docs/integration-matrix.md).
+
+## License
+
+Source-available proprietary software for internal use & evaluation; redistribution, repackaging & competing use are prohibited. See [LICENSE](LICENSE). Prior MIT grants remain documented in [LICENSE-MIT-LEGACY](LICENSE-MIT-LEGACY).

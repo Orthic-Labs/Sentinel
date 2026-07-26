@@ -2,7 +2,7 @@
   "name": "@orthic-labs/tether",
   "version": "2.0.0",
   "description": "REFLECT — Recursive Evidence Framework for Learning, Execution, Context and Thought: evidence-gated reflection, exact-version docs, and model-independent enforcement hooks.",
-  "license": "MIT",
+  "license": "SEE LICENSE IN LICENSE",
   "homepage": "https://github.com/Orthic-Labs/tether#readme",
   "repository": { "type": "git", "url": "git+https://github.com/Orthic-Labs/tether.git" },
   "bugs": { "url": "https://github.com/Orthic-Labs/tether/issues" },

@@ -1,18 +1,35 @@
-MIT License
+# Orthic Labs Source Use License v1.0
 
-Copyright (c) 2026 Damned Designs
+**Effective July 26, 2026**
 
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
-associated documentation files (the "Software"), to deal in the Software without restriction,
-including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
-and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so,
-subject to the following conditions:
+Copyright © 2026 Damned Ventures LLC. All rights reserved.
 
-The above copyright notice and this permission notice shall be included in all copies or substantial
-portions of the Software.
+## Source available, not open source
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT
-NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
-NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES
-OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
-CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+This repository's software, source code, documentation, designs, prompts, workflows, assets, and other proprietary material (collectively, the **Licensed Material**) are source-available for the limited purposes below. They are not open-source software and are licensed, not sold.
+
+## Limited use grant
+
+Subject to these terms, Damned Ventures LLC (**Licensor**) grants you a limited, non-exclusive, non-transferable, non-sublicensable right to access, clone, compile, run, and make copies of the Licensed Material strictly necessary to evaluate it or use it for your own internal personal, research, educational, or business purposes.
+
+## Restrictions
+
+Except for copies strictly necessary under the grant above or a separate written agreement with Licensor, you must not, and must not help another person to:
+
+- publish, distribute, share, mirror, sell, resell, sublicense, rent, lease, host, or otherwise make the Licensed Material available to another person;
+- modify, adapt, translate, create derivative works from, repack, or combine the Licensed Material into another product or service;
+- use the Licensed Material or its structure, algorithms, prompts, workflows, documentation, benchmarks, or extracted information to build, train, benchmark for replication, market, or provide a competing product or hosted service;
+- remove, hide, or alter copyright, trademark, provenance, security, or license notices; or
+- bypass a technical protection, access control, license check, feature gate, update signature, or usage limit.
+
+## Ownership, trademarks, and third-party material
+
+Licensor and its licensors retain all right, title, and interest in the Licensed Material, including copyright, patent, trade-secret, and trademark rights. No trademark right is granted. Third-party software, models, fonts, data, and other components remain subject to their own licenses; those licenses control for those components and are not restricted by these terms.
+
+## Legacy MIT releases
+
+This license does not revoke permissions granted for copies previously distributed under the MIT License. The historic MIT text is retained in [`LICENSE-MIT-LEGACY`](LICENSE-MIT-LEGACY).
+
+## Warranty, termination, and law
+
+The Licensed Material is provided **AS IS** and **AS AVAILABLE**, without warranties to the maximum extent permitted by law. This license ends automatically on a material breach; then you must stop use and delete proprietary copies, except one archival copy required by law. Wyoming law governs business use, subject to non-waivable consumer law. Questions: legal@damnedventures.com.
