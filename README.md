@@ -1,14 +1,18 @@
 # Tether
 
-**Keep the agent tied to what is actually true.**
+> **TL;DR:** Tether stops coding agents from declaring success until important claims are backed by evidence & real checks.
 
-Tether is a local evidence-and-gate core for coding agents. It ties every material claim to evidence
-the tool read itself, and refuses to let a task close until the checks actually pass. It records
-claims, evidence, decisions, and checks — it never persists private chain-of-thought.
+Coding agents can sound certain even when they read an old file, misunderstood an API or skipped a
+failing test. Tether gives them a local evidence ledger & signoff gate. Important claims must point
+to evidence Tether can read, hash & invalidate when source changes.
 
-The enforcement hooks work **without MCP and without model cooperation**, which is the point: a model
-cannot talk its way past a gate it does not run. The optional MCP server exposes two tools: `tether`
-(`assess`, `checkpoint`, `verify`, `close`) and `docs`.
+During work, Tether records claims, evidence, decisions & executable checks. At signoff, it blocks
+completion while critical claims remain unsupported or required checks still fail. It stores this
+audit trail, never private chain-of-thought.
+
+Enforcement hooks work **without MCP & without model cooperation**, so a model cannot talk its way
+past a gate it does not run. An optional MCP server exposes `tether` (`assess`, `checkpoint`,
+`verify`, `close`) plus `docs`.
 
 ## Why "tether"
 
