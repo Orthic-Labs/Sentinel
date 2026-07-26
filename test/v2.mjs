@@ -31,7 +31,30 @@ const enforcedHook = spawnSync(process.execPath, [join(fileURLToPath(new URL('..
   windowsHide: true,
 });
 assert.equal(enforcedHook.status, 1, enforcedHook.stderr);
-assert.equal(JSON.parse(enforcedHook.stdout).action, 'block');
+const enforcedHookResult = JSON.parse(enforcedHook.stdout);
+assert.equal(enforcedHookResult.action, 'block');
+const inProcessGenericHook = spawnSync(process.execPath, ['-e', `const { evaluate } = require(${JSON.stringify(join(fileURLToPath(new URL('..', import.meta.url)), 'hooks', 'generic', 'hook.js'))}); process.stdout.write(JSON.stringify(evaluate(${JSON.stringify({ hook_event_name: 'PreToolUse', run_id: assessed.run_id, tool_input: { command: 'rm -rf build-output' } })})));`], {
+  cwd: project,
+  env: { ...process.env, TETHER_ROOT: fileURLToPath(new URL('..', import.meta.url)), TETHER_STORE_ROOT: join(project, '.tether') },
+  encoding: 'utf8',
+  windowsHide: true,
+});
+assert.equal(inProcessGenericHook.status, 0, inProcessGenericHook.stderr);
+const inProcessGenericHookResult = JSON.parse(inProcessGenericHook.stdout);
+assert.deepEqual(
+  {
+    action: inProcessGenericHookResult.action,
+    reason: inProcessGenericHookResult.reason,
+    decision: inProcessGenericHookResult.result.decision,
+    gate: inProcessGenericHookResult.result.gate,
+  },
+  {
+    action: enforcedHookResult.action,
+    reason: enforcedHookResult.reason,
+    decision: enforcedHookResult.result.decision,
+    gate: enforcedHookResult.result.gate,
+  },
+);
 const failureHook = spawnSync(process.execPath, [join(fileURLToPath(new URL('..', import.meta.url)), 'hooks', 'generic', 'hook.js')], {
   cwd: project,
   env: { ...process.env, TETHER_ROOT: fileURLToPath(new URL('..', import.meta.url)), TETHER_STORE_ROOT: join(project, '.tether') },
@@ -49,7 +72,11 @@ const codexHook = spawnSync(process.execPath, [join(fileURLToPath(new URL('..', 
   windowsHide: true,
 });
 assert.equal(codexHook.status, 0, codexHook.stderr);
-assert.equal(JSON.parse(codexHook.stdout).hookSpecificOutput.permissionDecision, 'deny');
+assert.deepEqual(JSON.parse(codexHook.stdout), {
+  hookSpecificOutput: {
+    hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: 'high-risk gate unmet',
+  },
+});
 const claudeHook = spawnSync(process.execPath, [join(fileURLToPath(new URL('..', import.meta.url)), 'hooks', 'claude-code', 'hook.js')], {
   cwd: project,
   env: { ...process.env, CLAUDE_SESSION_ID: 'claude-session-4', TETHER_STORE_ROOT: join(project, '.tether') },
@@ -58,7 +85,12 @@ const claudeHook = spawnSync(process.execPath, [join(fileURLToPath(new URL('..',
   windowsHide: true,
 });
 assert.equal(claudeHook.status, 0, claudeHook.stderr);
-assert.equal(JSON.parse(claudeHook.stdout).hookSpecificOutput.permissionDecision, 'deny');
+assert.deepEqual(JSON.parse(claudeHook.stdout), {
+  hookSpecificOutput: {
+    hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: 'high-risk gate unmet',
+  },
+});
+assert.doesNotMatch(readFileSync(join(fileURLToPath(new URL('..', import.meta.url)), 'hooks', 'adapter.js'), 'utf8'), /(?:child_process|spawnSync)/);
 const claim = store.list('claims')[0];
 const blocked = core.checkpoint({ run_id: assessed.run_id, failure: { error_fingerprint: 'same-failure', observed_failure: 'bad result' } });
 assert.equal(blocked.decision, 'proceed_with_change');

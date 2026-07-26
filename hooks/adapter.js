@@ -1,25 +1,17 @@
 #!/usr/bin/env node
 'use strict';
 
-const { spawnSync } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
+const { evaluate } = require('./generic/hook');
 
 function main() {
   const raw = fs.readFileSync(0, 'utf8');
   let event = {};
   try { event = JSON.parse(raw); } catch { /* Generic hook safely handles malformed host events. */ }
   const root = path.resolve(__dirname, '..');
-  const child = spawnSync(process.execPath, [path.join(root, 'hooks', 'generic', 'hook.js')], {
-    input: raw,
-    encoding: 'utf8',
-    windowsHide: true,
-    env: { ...process.env, TETHER_ROOT: root },
-  });
   let result = { action: 'noop', reason: 'tether hook unavailable' };
-  if (!child.error) {
-    try { result = JSON.parse(child.stdout); } catch { /* Fail open when Tether cannot parse its own result. */ }
-  }
+  try { result = evaluate(event, { root }); } catch { /* Fail open when Tether cannot evaluate its own result. */ }
   if (result.action !== 'block') return;
   const eventName = event.hook_event_name ?? event.event ?? event.type ?? '';
   const reason = String(result.reason ?? 'tether gate unmet').slice(0, 500);
