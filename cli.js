@@ -8,8 +8,10 @@ const { resolveDocs } = require('./lib/docs');
 async function main(argv = process.argv.slice(2), inputText = readStdin()) {
   const { command, flags } = parseArgs(argv);
   const input = inputText ? JSON.parse(inputText) : {};
-  if (flags.operator && process.env.TETHER_TRUSTED_CALLER !== 'hook') throw new Error('--operator requires trusted host caller');
-  const authority = flags.operator ? 'operator' : 'model';
+  if ((flags.operator || flags.hook) && process.env.TETHER_TRUSTED_CALLER !== 'hook') {
+    throw new Error(`--${flags.hook ? 'hook' : 'operator'} requires trusted host caller`);
+  }
+  const authority = flags.hook ? 'hook' : flags.operator ? 'operator' : 'model';
   const core = new ReflectCore({ authority, projectRoot: flags.project ?? process.cwd(), storeRoot: flags.store });
   let value;
   if (command === 'docs') value = resolveDocs({ ...input, path: input.path ?? flags.project }, { projectRoot: flags.project ?? process.cwd(), store: core.store });
@@ -32,6 +34,7 @@ function parseArgs(argv) {
     const arg = argv[index];
     if (!arg.startsWith('--') && command === 'tether') { command = arg; continue; }
     if (arg === '--operator') { flags.operator = true; continue; }
+    if (arg === '--hook') { flags.hook = true; continue; }
     if (arg === '--json') { flags.json = true; continue; }
     const [key, inline] = arg.slice(2).split('=', 2);
     flags[key.replaceAll('-', '_')] = inline ?? argv[++index];

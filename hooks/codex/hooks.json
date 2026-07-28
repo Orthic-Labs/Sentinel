@@ -1,7 +1,7 @@
 {
   "hooks": {
     "PreToolUse": [{
-      "matcher": "shell",
+      "matcher": "shell|shell_command|Bash|PowerShell|Write|Edit|MultiEdit|apply_patch",
       "hooks": [{
         "type": "command",
         "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/codex/hook.js\"",
@@ -11,7 +11,17 @@
       }]
     }],
     "PostToolUse": [{
-      "matcher": "shell",
+      "matcher": "shell|shell_command|Bash|PowerShell",
+      "hooks": [{
+        "type": "command",
+        "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/codex/hook.js\"",
+        "commandWindows": "node \"$env:CLAUDE_PLUGIN_ROOT\\hooks\\codex\\hook.js\"",
+        "timeout": 10,
+        "statusMessage": "Recording Tether verification..."
+      }]
+    }],
+    "PostToolUseFailure": [{
+      "matcher": "shell|shell_command|Bash|PowerShell|Write|Edit|MultiEdit|apply_patch",
       "hooks": [{
         "type": "command",
         "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/codex/hook.js\"",

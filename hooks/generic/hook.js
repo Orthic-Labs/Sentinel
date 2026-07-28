@@ -32,7 +32,7 @@ function evaluate(event, { root = process.env.TETHER_ROOT ?? path.resolve(__dirn
 
   // A host can emit lifecycle events before the model has assessed a task. Enforcement cannot
   // infer a run without inventing state, so those events are deliberately inert.
-  if (!runId && ['Stop', 'stop', 'PostToolUseFailure', 'post_tool_use_failure'].includes(name)) {
+  if (!runId && ['Stop', 'stop', 'PostToolUse', 'post_tool_use', 'PostToolUseFailure', 'post_tool_use_failure'].includes(name)) {
     return { action: 'noop', reason: 'no active tether run' };
   }
 
@@ -54,6 +54,27 @@ function evaluate(event, { root = process.env.TETHER_ROOT ?? path.resolve(__dirn
     return result.decision === 'blocked' ? { action: 'block', reason: 'identical failure retry budget exhausted', result } : { action: 'continue', result };
   }
 
+  if (name === 'PostToolUse' || name === 'post_tool_use') {
+    const command = String(event.command ?? event.tool_input?.command ?? '');
+    const response = event.tool_response ?? event.toolResponse ?? {};
+    const output = String(response.stdout ?? response.output ?? event.output ?? '').slice(0, 4_096);
+    const result = invoke(cli, 'verify', {
+      run_id: runId,
+      checks: [{
+        kind: 'tool',
+        specification: `${event.tool_name ?? 'tool'} completed successfully`,
+        command: command || null,
+        executor: 'hook',
+        status: 'passed',
+        exit_code: Number(response.exit_code ?? response.exitCode ?? event.exit_code ?? 0),
+        output,
+      }],
+    });
+    return result.decision === 'blocked'
+      ? { action: 'block', reason: 'successful tool check could not be recorded', result }
+      : { action: 'continue', result };
+  }
+
   if (name === 'PreToolUse' || name === 'pre_tool_use') {
     const command = String(event.command ?? event.tool_input?.command ?? '');
     if (!isRisky(command)) return { action: 'noop', reason: 'routine tool use' };
@@ -73,7 +94,7 @@ function evaluate(event, { root = process.env.TETHER_ROOT ?? path.resolve(__dirn
 }
 
 function invoke(cli, command, input) {
-  const child = spawnSync(process.execPath, [cli, command, '--operator', '--json'], { input: JSON.stringify(input), encoding: 'utf8', windowsHide: true, env: { ...process.env, TETHER_TRUSTED_CALLER: 'hook' } });
+  const child = spawnSync(process.execPath, [cli, command, '--hook', '--json'], { input: JSON.stringify(input), encoding: 'utf8', windowsHide: true, env: { ...process.env, TETHER_TRUSTED_CALLER: 'hook' } });
   if (child.error) return { decision: 'blocked', error: child.error.message };
   try { return JSON.parse(child.stdout); } catch { return { decision: 'blocked', error: child.stderr || 'tether-cli returned invalid JSON' }; }
 }

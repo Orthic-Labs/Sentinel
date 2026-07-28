@@ -53,6 +53,18 @@ assert.deepEqual(JSON.parse(unassessedRiskHook.stdout), {
   action: 'block',
   reason: 'high-risk command requires Tether assess before execution',
 });
+const unassessedSuccessHook = spawnSync(process.execPath, [join(fileURLToPath(new URL('..', import.meta.url)), 'hooks', 'generic', 'hook.js')], {
+  cwd: project,
+  env: { ...process.env, TETHER_ROOT: fileURLToPath(new URL('..', import.meta.url)), TETHER_STORE_ROOT: unassessedRiskStore },
+  input: JSON.stringify({ hook_event_name: 'PostToolUse', tool_name: 'shell', tool_input: { command: 'node --version' } }),
+  encoding: 'utf8',
+  windowsHide: true,
+});
+assert.equal(unassessedSuccessHook.status, 0, unassessedSuccessHook.stderr);
+assert.deepEqual(JSON.parse(unassessedSuccessHook.stdout), {
+  action: 'noop',
+  reason: 'no active tether run',
+});
 
 const assessed = core.assess({ summary: 'Fix client middleware', task_kind: 'feature', claims: [{ text: 'configure is the installed API', kind: 'versioned_api', materiality: 'critical' }] });
 assert.equal(assessed.decision, 'proceed');
@@ -100,6 +112,33 @@ const failureHook = spawnSync(process.execPath, [join(fileURLToPath(new URL('..'
 });
 assert.equal(failureHook.status, 0, failureHook.stderr);
 assert.equal(JSON.parse(failureHook.stdout).action, 'continue');
+const successfulHook = spawnSync(process.execPath, [join(fileURLToPath(new URL('..', import.meta.url)), 'hooks', 'generic', 'hook.js')], {
+  cwd: project,
+  env: { ...process.env, TETHER_ROOT: fileURLToPath(new URL('..', import.meta.url)), TETHER_STORE_ROOT: join(project, '.tether') },
+  input: JSON.stringify({
+    hook_event_name: 'PostToolUse',
+    run_id: assessed.run_id,
+    tool_name: 'shell',
+    tool_input: { command: 'node --version' },
+    tool_response: { exit_code: 0, stdout: 'v24.0.0' },
+  }),
+  encoding: 'utf8',
+  windowsHide: true,
+});
+assert.equal(successfulHook.status, 0, successfulHook.stderr);
+assert.equal(JSON.parse(successfulHook.stdout).action, 'continue');
+const trustedHookCheck = store.list('checks').find((row) => row.command === 'node --version');
+assert.equal(trustedHookCheck.authority, 'hook');
+assert.equal(trustedHookCheck.executor, 'hook');
+assert.equal(trustedHookCheck.status, 'passed');
+const spoofedHookCli = spawnSync(process.execPath, [join(fileURLToPath(new URL('..', import.meta.url)), 'cli.js'), 'verify', '--hook', '--json'], {
+  cwd: project,
+  input: JSON.stringify({ run_id: assessed.run_id, checks: [{ kind: 'test', status: 'passed' }] }),
+  encoding: 'utf8',
+  windowsHide: true,
+});
+assert.notEqual(spoofedHookCli.status, 0);
+assert.match(spoofedHookCli.stderr, /trusted host caller/);
 const codexHook = spawnSync(process.execPath, [join(fileURLToPath(new URL('..', import.meta.url)), 'hooks', 'codex', 'hook.js')], {
   cwd: project,
   env: { ...process.env, CODEX_SESSION_ID: 'codex-session-1', TETHER_STORE_ROOT: join(project, '.tether') },
