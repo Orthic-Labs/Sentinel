@@ -21,12 +21,18 @@ function evaluate(event, { root = process.env.TETHER_ROOT ?? path.resolve(__dirn
   if (!runId && sessionId) {
     const binding = invoke(cli, 'resolve-session', { session_id: sessionId });
     runId = binding.run_id;
-    if (!runId) return { action: 'noop', reason: binding.status === 'ambiguous' ? 'ambiguous active tether runs' : 'no active tether run' };
+    if (!runId && binding.status === 'ambiguous') return { action: 'block', reason: 'ambiguous active tether runs' };
+  }
+
+  if (!runId && (name === 'PreToolUse' || name === 'pre_tool_use')) {
+    const command = String(event.command ?? event.tool_input?.command ?? '');
+    if (isRisky(command)) return { action: 'block', reason: 'high-risk command requires Tether assess before execution' };
+    return { action: 'noop', reason: 'routine tool use without active tether run' };
   }
 
   // A host can emit lifecycle events before the model has assessed a task. Enforcement cannot
   // infer a run without inventing state, so those events are deliberately inert.
-  if (!runId && ['Stop', 'stop', 'PreToolUse', 'pre_tool_use', 'PostToolUseFailure', 'post_tool_use_failure'].includes(name)) {
+  if (!runId && ['Stop', 'stop', 'PostToolUseFailure', 'post_tool_use_failure'].includes(name)) {
     return { action: 'noop', reason: 'no active tether run' };
   }
 

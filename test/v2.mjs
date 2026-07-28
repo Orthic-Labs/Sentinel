@@ -18,6 +18,42 @@ writeFileSync(join(project, 'node_modules', 'demo-lib', 'README.md'), '# Client\
 
 const store = createStore(join(project, '.tether'));
 const core = new ReflectCore({ projectRoot: project, store });
+assert.throws(
+  () => core.assess({ run_id: 'invalid-claim-run', summary: 'Reject malformed claim', claims: ['not-an-object'] }),
+  /claim must be an object/,
+);
+assert.equal(store.get('runs', 'invalid-claim-run'), null);
+
+const mcpPayload = [
+  JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-11-25', capabilities: {}, clientInfo: { name: 'schema-test', version: '1' } } }),
+  JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} }),
+].join('\n') + '\n';
+const mcpSchema = spawnSync(process.execPath, [join(fileURLToPath(new URL('..', import.meta.url)), 'server.js')], {
+  cwd: project, input: mcpPayload, encoding: 'utf8', windowsHide: true,
+});
+assert.equal(mcpSchema.status, 0, mcpSchema.stderr);
+const mcpResponses = mcpSchema.stdout.trim().split('\n').map((line) => JSON.parse(line));
+const tetherSchema = mcpResponses.find((response) => response.id === 2).result.tools.find((tool) => tool.name === 'tether').inputSchema;
+assert.equal(tetherSchema.properties.claims.items.type, 'object');
+assert.equal(tetherSchema.properties.evidence.items.type, 'object');
+assert.equal(tetherSchema.properties.checks.items.type, 'object');
+assert.deepEqual(tetherSchema.allOf[0].then.required, ['summary']);
+assert.deepEqual(tetherSchema.allOf[0].else.required, ['run_id']);
+
+const unassessedRiskStore = join(root, 'unassessed-risk-store');
+const unassessedRiskHook = spawnSync(process.execPath, [join(fileURLToPath(new URL('..', import.meta.url)), 'hooks', 'generic', 'hook.js')], {
+  cwd: project,
+  env: { ...process.env, TETHER_ROOT: fileURLToPath(new URL('..', import.meta.url)), TETHER_STORE_ROOT: unassessedRiskStore },
+  input: JSON.stringify({ hook_event_name: 'PreToolUse', session_id: 'unassessed-session', tool_input: { command: 'git push --force origin main' } }),
+  encoding: 'utf8',
+  windowsHide: true,
+});
+assert.equal(unassessedRiskHook.status, 1, unassessedRiskHook.stderr);
+assert.deepEqual(JSON.parse(unassessedRiskHook.stdout), {
+  action: 'block',
+  reason: 'high-risk command requires Tether assess before execution',
+});
+
 const assessed = core.assess({ summary: 'Fix client middleware', task_kind: 'feature', claims: [{ text: 'configure is the installed API', kind: 'versioned_api', materiality: 'critical' }] });
 assert.equal(assessed.decision, 'proceed');
 const sessionBinding = core.resolveSession({ session_id: 'claude-session-1' });

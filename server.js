@@ -68,6 +68,77 @@ const contextAnnotations = {
   openWorldHint: true,
 };
 
+const claimInputSchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' },
+    text: { type: 'string', minLength: 1, maxLength: 2_000 },
+    kind: {
+      type: 'string',
+      enum: ['local_fact', 'behavioral_fact', 'versioned_api', 'current_external', 'stable_reference', 'inference', 'preference', 'hypothesis'],
+    },
+    materiality: { type: 'string', enum: ['trivial', 'useful', 'material', 'critical'] },
+    status: { type: 'string', enum: ['open'] },
+    invalidation_key: { type: 'string' },
+    confidence: { type: 'number' },
+  },
+  required: ['text'],
+  additionalProperties: false,
+};
+
+const claimUpdateInputSchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'string', minLength: 1 },
+    status: { type: 'string', enum: ['open', 'supported', 'refuted', 'stale', 'waived'] },
+    invalidation_key: { type: 'string' },
+    confidence: { type: 'number' },
+    waiver: { type: 'object' },
+  },
+  required: ['id'],
+  additionalProperties: false,
+};
+
+const evidenceInputSchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' },
+    claim_ids: { type: 'array', items: { type: 'string' }, maxItems: 30 },
+    kind: { type: 'string' },
+    uri: { type: 'string' },
+    locator: { type: 'string' },
+    version_or_commit: { type: 'string' },
+    content_hash: { type: 'string' },
+    retrieved_at: { type: 'string' },
+    observed_at: { type: 'string' },
+    trust_class: { type: 'string' },
+    freshness_policy: { type: 'string' },
+    invalidation_key: { type: 'string' },
+    supports_or_refutes: { type: 'string', enum: ['supports', 'refutes'] },
+    excerpt: { type: 'string', maxLength: 2_000 },
+    security_labels: { type: 'array', items: { type: 'string' } },
+  },
+  additionalProperties: false,
+};
+
+const checkInputSchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' },
+    kind: { type: 'string' },
+    specification: { type: 'string' },
+    command: { type: 'string' },
+    executor: { type: 'string' },
+    env_fingerprint: { type: 'string' },
+    workspace_hash: { type: 'string' },
+    status: { type: 'string', enum: ['passed', 'failed', 'skipped'] },
+    exit_code: { type: 'integer' },
+    output: { type: 'string', maxLength: 4_000 },
+    output_ref: { type: 'string' },
+  },
+  additionalProperties: false,
+};
+
 const sequentialThinkingTool = {
   name: 'sequentialthinking',
   title: 'Sequential Thinking Checkpoint',
@@ -274,26 +345,31 @@ const reflectTool = {
     properties: {
       operation: { type: 'string', enum: ['assess', 'checkpoint', 'verify', 'close'] },
       run_id: { type: 'string', minLength: 1, maxLength: 128 },
-      summary: { type: 'string', minLength: 1, maxLength: 2_000 },
+      summary: { type: 'string', minLength: 1, maxLength: 2_000, description: 'Required when operation is assess.' },
       task_kind: { type: 'string', maxLength: 40 },
-      claims: { type: 'array', maxItems: 30 },
-      claim_updates: { type: 'array', maxItems: 30 },
-      invalidated_keys: { type: 'array', maxItems: 30 },
-      evidence: { type: 'array', maxItems: 30 },
-      checks: { type: 'array', maxItems: 20 },
+      claims: { type: 'array', items: claimInputSchema, maxItems: 30 },
+      claim_updates: { type: 'array', items: claimUpdateInputSchema, maxItems: 30 },
+      invalidated_keys: { type: 'array', items: { type: 'string' }, maxItems: 30 },
+      evidence: { type: 'array', items: evidenceInputSchema, maxItems: 30 },
+      checks: { type: 'array', items: checkInputSchema, maxItems: 20 },
       rubric: { type: 'object' },
       failure: { type: 'object' },
       gate: { type: 'string', enum: ['signoff', 'high_risk'] },
       budget: { type: 'object' },
       trigger_flags: { type: 'object' },
-      acceptance_criteria: { type: 'array', maxItems: 30 },
-      memory_candidates: { type: 'array', maxItems: 20 },
+      acceptance_criteria: { type: 'array', items: { type: 'string' }, maxItems: 30 },
+      memory_candidates: { type: 'array', items: { type: 'object' }, maxItems: 20 },
       workspace_hash: { type: 'string', maxLength: 256 },
       intent_restatement: { type: 'string', maxLength: 2_000 },
       blast_radius: { type: 'string', maxLength: 2_000 },
       why_safe: { type: 'string', maxLength: 2_000 },
     },
     required: ['operation'],
+    allOf: [{
+      if: { properties: { operation: { const: 'assess' } }, required: ['operation'] },
+      then: { required: ['summary'] },
+      else: { required: ['run_id'] },
+    }],
     additionalProperties: false,
   },
   outputSchema: {
@@ -1109,6 +1185,11 @@ function validateReflectArgs(args) {
   for (const field of ['claims', 'claim_updates', 'invalidated_keys', 'evidence', 'checks', 'acceptance_criteria', 'memory_candidates']) {
     if (args[field] !== undefined && (!Array.isArray(args[field]) || args[field].length > reflectTool.inputSchema.properties[field].maxItems)) throw new RpcError(-32602, `${field} must be a bounded array`);
   }
+  for (const field of ['claims', 'claim_updates', 'evidence', 'checks', 'memory_candidates']) {
+    validateObjectArray(args, field);
+  }
+  validateStringArray(args, 'invalidated_keys', 30, 256);
+  validateStringArray(args, 'acceptance_criteria', 30, 2_000);
   if (args.budget !== undefined && (!args.budget || typeof args.budget !== 'object' || Array.isArray(args.budget))) throw new RpcError(-32602, 'budget must be an object');
 }
 
@@ -1241,6 +1322,18 @@ function validateStringArray(args, field, maximumItems, maximumItemLength) {
   for (const entry of value) {
     if (typeof entry !== 'string' || entry.trim().length === 0 || entry.length > maximumItemLength) {
       throw new RpcError(-32602, `${field} entries must be non-empty strings of at most ${maximumItemLength} characters`);
+    }
+  }
+}
+
+function validateObjectArray(args, field) {
+  const value = args[field];
+  if (value === undefined) {
+    return;
+  }
+  for (const entry of value) {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+      throw new RpcError(-32602, `${field} entries must be objects`);
     }
   }
 }
