@@ -18,10 +18,13 @@ function evaluate(event, { root = process.env.TETHER_ROOT ?? path.resolve(__dirn
   let runId = event.run_id;
   const sessionId = event.session_id ?? event.sessionId ?? process.env.CODEX_SESSION_ID ?? process.env.CLAUDE_SESSION_ID;
 
+  if (name === 'Stop' && (event.stop_hook_active === true || event.stopHookActive === true)) {
+    return { action: 'noop', reason: 'stop_hook_active' };
+  }
+
   if (!runId && sessionId) {
     const binding = invoke(cli, 'resolve-session', { session_id: sessionId });
     runId = binding.run_id;
-    if (!runId && binding.status === 'ambiguous') return { action: 'block', reason: 'ambiguous active tether runs' };
   }
 
   if (!runId && (name === 'PreToolUse' || name === 'pre_tool_use')) {
@@ -34,10 +37,6 @@ function evaluate(event, { root = process.env.TETHER_ROOT ?? path.resolve(__dirn
   // infer a run without inventing state, so those events are deliberately inert.
   if (!runId && ['Stop', 'stop', 'PostToolUse', 'post_tool_use', 'PostToolUseFailure', 'post_tool_use_failure'].includes(name)) {
     return { action: 'noop', reason: 'no active tether run' };
-  }
-
-  if (name === 'Stop' && (event.stop_hook_active === true || event.stopHookActive === true)) {
-    return { action: 'noop', reason: 'stop_hook_active' };
   }
 
   const isFailureEvent = name === 'PostToolUseFailure' || name === 'post_tool_use_failure'

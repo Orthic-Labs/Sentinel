@@ -66,6 +66,45 @@ assert.deepEqual(JSON.parse(unassessedSuccessHook.stdout), {
   reason: 'no active tether run',
 });
 
+const ambiguousStoreRoot = join(root, 'ambiguous-store');
+const ambiguousStore = createStore(ambiguousStoreRoot);
+const ambiguousCore = new ReflectCore({ projectRoot: project, store: ambiguousStore });
+ambiguousCore.assess({ summary: 'First unrelated task' });
+ambiguousCore.assess({ summary: 'Second unrelated task' });
+const recursiveAmbiguousStop = spawnSync(process.execPath, [join(fileURLToPath(new URL('..', import.meta.url)), 'hooks', 'generic', 'hook.js')], {
+  cwd: project,
+  env: { ...process.env, TETHER_ROOT: fileURLToPath(new URL('..', import.meta.url)), TETHER_STORE_ROOT: ambiguousStoreRoot },
+  input: JSON.stringify({ hook_event_name: 'Stop', session_id: 'recursive-session', stop_hook_active: true }),
+  encoding: 'utf8',
+  windowsHide: true,
+});
+assert.equal(recursiveAmbiguousStop.status, 0, recursiveAmbiguousStop.stderr);
+assert.deepEqual(JSON.parse(recursiveAmbiguousStop.stdout), {
+  action: 'noop',
+  reason: 'stop_hook_active',
+});
+const idleAmbiguousStop = spawnSync(process.execPath, [join(fileURLToPath(new URL('..', import.meta.url)), 'hooks', 'generic', 'hook.js')], {
+  cwd: project,
+  env: { ...process.env, TETHER_ROOT: fileURLToPath(new URL('..', import.meta.url)), TETHER_STORE_ROOT: ambiguousStoreRoot },
+  input: JSON.stringify({ hook_event_name: 'Stop', session_id: 'idle-session' }),
+  encoding: 'utf8',
+  windowsHide: true,
+});
+assert.equal(idleAmbiguousStop.status, 0, idleAmbiguousStop.stderr);
+assert.deepEqual(JSON.parse(idleAmbiguousStop.stdout), {
+  action: 'noop',
+  reason: 'no active tether run',
+});
+const riskyAmbiguousUse = spawnSync(process.execPath, [join(fileURLToPath(new URL('..', import.meta.url)), 'hooks', 'generic', 'hook.js')], {
+  cwd: project,
+  env: { ...process.env, TETHER_ROOT: fileURLToPath(new URL('..', import.meta.url)), TETHER_STORE_ROOT: ambiguousStoreRoot },
+  input: JSON.stringify({ hook_event_name: 'PreToolUse', session_id: 'risky-session', tool_input: { command: 'git push --force origin main' } }),
+  encoding: 'utf8',
+  windowsHide: true,
+});
+assert.equal(riskyAmbiguousUse.status, 1, riskyAmbiguousUse.stderr);
+assert.equal(JSON.parse(riskyAmbiguousUse.stdout).action, 'block');
+
 const assessed = core.assess({ summary: 'Fix client middleware', task_kind: 'feature', claims: [{ text: 'configure is the installed API', kind: 'versioned_api', materiality: 'critical' }] });
 assert.equal(assessed.decision, 'proceed');
 const sessionBinding = core.resolveSession({ session_id: 'claude-session-1' });
