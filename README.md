@@ -1,12 +1,18 @@
-# Tether
+<img src=".github/banner.svg" alt="Sentinel — Claims need evidence. Checks must pass." width="100%">
 
-> **TL;DR:** Tether stops AI agents signing off on source guesses or skipped tests: important claims need source-backed evidence & required checks must pass before work can close.
+**Sentinel stops AI agents from signing off on source guesses or skipped tests: material claims need source-backed evidence, and required checks must pass before work can close.**
 
-Coding agents can sound certain after reading stale code, guessing an API or skipping a failed test.
-Tether adds a local evidence ledger plus enforcement gates, turning “I think this is correct” into a
-proof trail: claim, source hash, check result & policy that allowed signoff.
+[![License](https://img.shields.io/badge/license-source--available?style=flat-square&labelColor=111318&color=5362d8)](LICENSE)
+[![Ledger](https://img.shields.io/badge/ledger-local--first?style=flat-square&labelColor=111318&color=5362d8)](#local-ledger)
+[![Interfaces](https://img.shields.io/badge/interfaces-CLI%20%2B%20MCP?style=flat-square&labelColor=111318&color=5362d8)](#quick-start)
 
-It stores structured work state—not private chain-of-thought.
+## What it is
+
+The public repo is Sentinel. The CLI package and MCP tool keep the name `tether`, which remains the compatibility alias for every command and tool id shown below.
+
+Coding agents can sound certain after reading stale code, guessing an API, or skipping a failed test. Sentinel adds a local evidence ledger plus enforcement gates, turning "I think this is correct" into a proof trail: claim, source hash, check result, and the policy that allowed signoff.
+
+It stores structured work state, not private chain-of-thought.
 
 ## How it works
 
@@ -31,31 +37,20 @@ Four operations share one core:
 
 | Operation | Purpose |
 |---|---|
-| `assess` | open run, classify task, define claims & acceptance criteria |
-| `checkpoint` | record evidence, decisions, failures, checks & claim updates |
-| `verify` | evaluate current ledger against task policy or high-risk gate |
+| `assess` | open a run, classify the task, define claims and acceptance criteria |
+| `checkpoint` | record evidence, decisions, failures, checks, and claim updates |
+| `verify` | evaluate the current ledger against task policy or a high-risk gate |
 | `close` | sign off only when required proof is complete |
 
-CLI is primary transport for hooks & automation. Optional MCP server exposes `tether` plus `docs`
-for model-initiated use.
+The CLI is the primary transport for hooks and automation. An optional MCP server exposes `tether` plus `docs` for model-initiated use.
 
-## Evidence, not evidence-shaped prose
+## Evidence model
 
-A repo claim counts only when Tether itself can read locator & hash its content. An excerpt supplied
-by model can be stored for context, but it cannot satisfy repository-evidence policy by assertion.
+A repo claim counts only when Sentinel itself reads the locator and hashes its content. A model-supplied excerpt can be stored for context, but it does not satisfy repository-evidence policy by assertion alone.
 
-Evidence records can carry:
+Evidence records carry: kind and trust class, locator, SHA-256 payload hash, retrieval time, linked claim IDs, invalidation key, and a bounded excerpt or stored payload reference.
 
-- kind & trust class;
-- locator;
-- SHA-256 payload/content hash;
-- retrieval time;
-- linked claim IDs;
-- invalidation key;
-- bounded excerpt or stored payload reference.
-
-Claim states are explicit: open, supported, refuted, stale or waived. Material/critical claims left
-open block signoff.
+Claim states are explicit: open, supported, refuted, stale, or waived. Material or critical claims left open block signoff.
 
 Evidence trust follows source:
 
@@ -71,60 +66,28 @@ deterministic execution
 
 Model assertions never satisfy external-proof minimums.
 
-## Invalidation
+Evidence stays useful only while the source it describes stays the same. Sentinel binds proof to event keys: file content hash, lockfile or dependency version, worktree state, current external revision or expiry, check input fingerprint. When a key changes, linked evidence goes stale and dependent claims need rechecking. Exact-version facts use lockfile or source invalidation instead of arbitrary time decay.
 
-Evidence remains useful only while source it describes remains same. Tether binds proof to event
-keys such as:
+## Local ledger
 
-- file content hash;
-- lockfile/dependency version;
-- worktree state;
-- current external revision/expiry;
-- check input fingerprint.
-
-When key changes, linked evidence becomes stale & dependent claims must be rechecked. Exact-version
-facts use lockfile/source invalidation rather than arbitrary time decay.
-
-## Local content-addressed ledger
-
-State lives under `.tether/` by default:
+The default store lives outside the project tree, in the host data directory (see `docs/store-migration.md`). A legacy repo-local `.tether/` is still read when present and not yet migrated.
 
 ```text
-.tether/
+~/Library/Application Support/tether/stores/<project-hash>/   # macOS default
 ├── events.jsonl
 └── objects/
     └── sha256/<prefix>/<digest>
 ```
 
-- directory permissions are owner-only;
-- event/object files use mode `0600`;
-- payloads are SHA-256 addressed & deduplicated;
-- objects are written to temporary file then atomically renamed;
-- JSONL appends preserve earlier valid events if process is interrupted;
-- state can move to CI/shared location through `TETHER_STORE_ROOT`.
+Directory permissions are owner-only; event and object files use mode `0600`. Payloads are SHA-256 addressed and deduplicated, written to a temporary file, then renamed atomically. JSONL appends preserve earlier valid events if the process is interrupted. Override the path with `TETHER_STORE_ROOT`, or migrate from `.tether/` per `docs/store-migration.md`.
 
-Run responses return state diffs—claim updates, next actions, unresolved items & context
-references—instead of replaying entire history into model context.
+Run responses return state diffs such as claim updates, next actions, unresolved items, and context references, instead of replaying the full history into the model's context.
 
-## Model-independent enforcement
+## Enforcement
 
-Tether’s strongest property is enforcement outside model.
+Sentinel's strongest property is enforcement outside the model. Host adapters can invoke the same core on tool failure, a blind identical retry, a risky command, signoff or stop, and generic CI or runner boundaries. This works without MCP and without the model remembering the protocol. Every adapter returns a neutral `{action: allow|continue|block|noop}` contract and never executes the user's command itself.
 
-Host adapters can invoke same core on:
-
-- tool failure;
-- blind identical retry;
-- risky command;
-- signoff/stop;
-- generic CI or runner boundaries.
-
-This works without MCP & without model remembering protocol. Every adapter returns neutral
-`{action: allow|continue|block|noop}` contract & never executes user command itself.
-
-Retry budgets fingerprint failed action. Repeating same unchanged attempt can be blocked while a
-meaningfully changed attempt receives new fingerprint.
-
-## Policy gates
+Retry budgets fingerprint a failed action. Repeating the same unchanged attempt can be blocked, while a meaningfully changed attempt gets a new fingerprint.
 
 Default policies vary by task kind:
 
@@ -135,38 +98,30 @@ Default policies vary by task kind:
 | bugfix / feature | attested repo evidence + trusted docs/log/test evidence + passing check |
 | release | same evidence classes + two passing checks |
 
-High-risk gate also requires explicit intent, blast radius & safety case.
-
-Checks count only when executor is not `model_claim`. Acceptance criteria can require particular
-evidence kinds. Close is idempotent when ledger hash has not changed; later work opens superseding
-run.
+The high-risk gate also requires explicit intent, blast radius, and a safety case. Checks count only when the executor is not `model_claim`. Acceptance criteria can require particular evidence kinds. Close is idempotent when the ledger hash hasn't changed; later work opens a superseding run.
 
 ## Version-aware docs
 
-`docs` resolves dependency version from project lockfiles, then searches installed package source
-before remote documentation. Results are hashed, bounded, labeled untrusted & scanned/redacted for
-injection-shaped content.
+`docs` resolves the dependency version from project lockfiles, then searches installed package source before remote documentation. Results are hashed, bounded, labeled untrusted, and scanned/redacted for injection-shaped content.
 
-Set `TETHER_DOCS_OFFLINE=1` to forbid network access. This makes version-sensitive API research
-reproducible instead of silently answering from latest documentation.
+Set `TETHER_DOCS_OFFLINE=1` to forbid network access. This makes version-sensitive API research reproducible instead of silently answering from latest documentation.
 
 ## What makes it different
 
-Tether is not a “think harder” prompt or reflection diary. Its concrete advantage comes from:
+Sentinel isn't a "think harder" prompt or a reflection diary. Its advantage:
 
-- **core-read attestation:** source counts only after core reads & hashes it;
-- **dependency-aware invalidation:** proof breaks when source/lockfile/input changes;
-- **model-independent gates:** hooks enforce policy even when model skips tool;
-- **typed uncertainty:** unsupported/refuted/stale are data states, not writing style;
-- **external-signal requirement:** executable checks outrank self-reported confidence;
-- **content-addressed audit trail:** compact, local & tamper-evident by hash;
-- **bounded state diffs:** rigor does not require replaying full work log;
-- **same core across CLI, MCP, hooks & CI:** no separate truth per integration.
+- core-read attestation: source counts only after the core reads and hashes it
+- dependency-aware invalidation: proof breaks when source, lockfile, or input changes
+- model-independent gates: hooks enforce policy even when the model skips a tool
+- typed uncertainty: unsupported, refuted, and stale are data states, not writing style
+- external-signal requirement: executable checks outrank self-reported confidence
+- content-addressed audit trail: compact, local, and tamper-evident by hash
+- bounded state diffs: rigor doesn't require replaying the full work log
+- one core across CLI, MCP, hooks, and CI: no separate truth per integration
 
-Tether’s moat is enforcement coupled to verifiable evidence—not another instruction asking model to
-be careful.
+Sentinel's moat is enforcement coupled to verifiable evidence, not another instruction asking the model to be careful.
 
-## Run
+## Quick start
 
 ```sh
 npx @orthic-labs/tether
@@ -187,27 +142,36 @@ docs(library, topic, version?, project_root?)
 
 - No private chain-of-thought persistence.
 - Retrieved content is framed as untrusted evidence.
-- Arbitrary client strings cannot expand supported protocol.
-- Store is local & owner-only by default.
+- Hooks read a host token from the application data directory; `TETHER_TRUSTED_CALLER` is retired (see `docs/store-migration.md`).
+- The store is local and owner-only by default.
 - Network documentation can be disabled completely.
-- Hooks never execute supplied commands.
-- Budget ceilings bound evidence items, verifier calls, external requests & return size.
+- Hooks never execute a supplied command.
+- Budget ceilings bound evidence items, verifier calls, external requests, and return size.
 
-## Current scope
+## Status
 
-Tether v2 ships claims, evidence, decisions, checks, invalidation, retry budgets, task policies,
-version-aware docs, CLI, MCP & host hooks.
+Sentinel v2 ships claims, evidence, decisions, checks, invalidation, retry budgets, task policies, version-aware docs, CLI, MCP, and host hooks.
 
 Current limits:
 
-- it proves supplied acceptance policy, not absence of every possible bug;
-- external/current facts still depend on available authoritative source;
-- host must install appropriate hook adapter for model-independent enforcement;
-- deprecated v1 tools return migration errors unless `TETHER_LEGACY_TOOLS=1` is set temporarily.
+- it proves the supplied acceptance policy, not the absence of every possible bug
+- external/current facts still depend on an available authoritative source
+- the host must install the appropriate hook adapter for model-independent enforcement
+- deprecated v1 tools return migration errors unless `TETHER_LEGACY_TOOLS=1` is set temporarily
 
-Full design history & adjudication: [`TETHER-MASTER.md`](TETHER-MASTER.md).
-Integration coverage: [`docs/integration-matrix.md`](docs/integration-matrix.md).
+Full design history and adjudication: [`TETHER-MASTER.md`](TETHER-MASTER.md). Integration coverage: [`docs/integration-matrix.md`](docs/integration-matrix.md).
 
 ## License
 
-Source-available proprietary software for internal use & evaluation; redistribution, repackaging & competing use are prohibited. See [LICENSE](LICENSE). Prior MIT grants remain documented in [LICENSE-MIT-LEGACY](LICENSE-MIT-LEGACY).
+Source-available proprietary software for internal use and evaluation; redistribution, repackaging, and competing use are prohibited. See [LICENSE](LICENSE). Prior MIT grants remain documented in [LICENSE-MIT-LEGACY](LICENSE-MIT-LEGACY).
+
+<!-- blueprint:docs:start -->
+## Repository truth docs
+- [Product overview](docs/product.md) — what this is and does (generated, code-grounded)
+- [Architecture](docs/architecture.md) — components, flows, interfaces (generated, code-grounded)
+<!-- blueprint:docs:end -->
+
+---
+
+<sub><b><a href="https://orthic-labs.github.io">Orthic Labs</a></b> — local-first infrastructure for AI-assisted development.<br>
+<a href="https://github.com/Orthic-Labs/Membrane">Membrane</a> · <a href="https://github.com/Orthic-Labs/Cortex">Cortex</a> · <a href="https://github.com/Orthic-Labs/Sentinel">Sentinel</a> · <a href="https://github.com/Orthic-Labs/Roundtable">Roundtable</a> · <a href="https://github.com/Orthic-Labs/Morph">Morph</a> · <a href="https://github.com/Orthic-Labs/CutRight">CutRight</a> · <a href="https://github.com/Orthic-Labs/claudecodeX">claudecodeX</a></sub>
