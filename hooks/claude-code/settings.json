@@ -1,7 +1,10 @@
 {
   "hooks": {
-    "PostToolUseFailure": [{ "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PROJECT_DIR}/hooks/claude-code/hook.js\"" }] }],
-    "PreToolUse": [{ "matcher": "Bash|Shell", "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PROJECT_DIR}/hooks/claude-code/hook.js\"" }] }],
+    "SessionStart": [{ "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PROJECT_DIR}/hooks/claude-code/context.js\"" }] }],
+    "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PROJECT_DIR}/hooks/claude-code/context.js\"" }] }],
+    "PostToolUse": [{ "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PROJECT_DIR}/hooks/claude-code/tool-receipt.js\"" }] }],
+    "PostToolUseFailure": [{ "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PROJECT_DIR}/hooks/claude-code/hook.js\"" }, { "type": "command", "command": "node \"${CLAUDE_PROJECT_DIR}/hooks/claude-code/tool-receipt.js\"" }] }],
+    "PreToolUse": [{ "matcher": "Bash|Shell", "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PROJECT_DIR}/hooks/claude-code/hook.js\"" }, { "type": "command", "command": "node \"${CLAUDE_PROJECT_DIR}/hooks/claude-code/tool-receipt.js\"" }] }],
     "Stop": [{ "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PROJECT_DIR}/hooks/claude-code/hook.js\"" }] }]
   }
 }

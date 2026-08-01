@@ -4,39 +4,39 @@
       "matcher": "shell|shell_command|Bash|PowerShell|Write|Edit|MultiEdit|apply_patch",
       "hooks": [{
         "type": "command",
-        "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/codex/hook.js\"",
-        "commandWindows": "node \"$env:CLAUDE_PLUGIN_ROOT\\hooks\\codex\\hook.js\"",
+        "command": "node \"${CODEX_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/hooks/codex/hook.js\"",
+        "commandWindows": "node \"$((if ($env:CODEX_PLUGIN_ROOT) { $env:CODEX_PLUGIN_ROOT } else { $env:CLAUDE_PLUGIN_ROOT }))\\hooks\\codex\\hook.js\"",
         "timeout": 10,
-        "statusMessage": "Checking Tether risk gate..."
+        "statusMessage": "Checking Beacon risk gate..."
       }]
     }],
     "PostToolUse": [{
       "matcher": "shell|shell_command|Bash|PowerShell",
       "hooks": [{
         "type": "command",
-        "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/codex/hook.js\"",
-        "commandWindows": "node \"$env:CLAUDE_PLUGIN_ROOT\\hooks\\codex\\hook.js\"",
+        "command": "node \"${CODEX_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/hooks/codex/hook.js\"",
+        "commandWindows": "node \"$((if ($env:CODEX_PLUGIN_ROOT) { $env:CODEX_PLUGIN_ROOT } else { $env:CLAUDE_PLUGIN_ROOT }))\\hooks\\codex\\hook.js\"",
         "timeout": 10,
-        "statusMessage": "Recording Tether verification..."
+        "statusMessage": "Recording Beacon verification..."
       }]
     }],
     "PostToolUseFailure": [{
       "matcher": "shell|shell_command|Bash|PowerShell|Write|Edit|MultiEdit|apply_patch",
       "hooks": [{
         "type": "command",
-        "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/codex/hook.js\"",
-        "commandWindows": "node \"$env:CLAUDE_PLUGIN_ROOT\\hooks\\codex\\hook.js\"",
+        "command": "node \"${CODEX_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/hooks/codex/hook.js\"",
+        "commandWindows": "node \"$((if ($env:CODEX_PLUGIN_ROOT) { $env:CODEX_PLUGIN_ROOT } else { $env:CLAUDE_PLUGIN_ROOT }))\\hooks\\codex\\hook.js\"",
         "timeout": 10,
-        "statusMessage": "Recording Tether failure..."
+        "statusMessage": "Recording Beacon failure..."
       }]
     }],
     "Stop": [{
       "hooks": [{
         "type": "command",
-        "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/codex/hook.js\"",
-        "commandWindows": "node \"$env:CLAUDE_PLUGIN_ROOT\\hooks\\codex\\hook.js\"",
+        "command": "node \"${CODEX_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/hooks/codex/hook.js\"",
+        "commandWindows": "node \"$((if ($env:CODEX_PLUGIN_ROOT) { $env:CODEX_PLUGIN_ROOT } else { $env:CLAUDE_PLUGIN_ROOT }))\\hooks\\codex\\hook.js\"",
         "timeout": 10,
-        "statusMessage": "Checking Tether signoff..."
+        "statusMessage": "Checking Beacon signoff..."
       }]
     }]
   }

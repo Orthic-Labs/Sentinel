@@ -177,7 +177,7 @@ try {
     capabilities: {},
     clientInfo: { name: 'reflect-test', version: '1.0.0' },
   });
-  assert.equal(initialized.result.serverInfo.name, 'tether');
+  assert.equal(initialized.result.serverInfo.name, 'sentinel');
   assert.equal(initialized.result.protocolVersion, '2025-11-25');
   assert.match(initialized.result.instructions, /Automatically call sequentialthinking before/);
   assert.match(initialized.result.instructions, /retrieve context before continuing/);
@@ -415,7 +415,7 @@ try {
   while (Date.now() < telemetryDeadline) {
     telemetryRows = readTelemetry(telemetryPath);
     const outcomes = new Set(telemetryRows
-      .filter((row) => row.event === 'reflect.tool_completed')
+      .filter((row) => row.event === 'sentinel.tool_completed')
       .map((row) => `${row.outcome}:${row.reason ?? ''}`));
     if (outcomes.has('delivered:')
       && outcomes.has('failed:invalid_arguments')
@@ -426,10 +426,10 @@ try {
     }
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
-  assert.ok(telemetryRows.some((row) => row.event === 'reflect.process_started'));
-  assert.ok(telemetryRows.some((row) => row.event === 'reflect.tool_called'
+  assert.ok(telemetryRows.some((row) => row.event === 'sentinel.process_started'));
+  assert.ok(telemetryRows.some((row) => row.event === 'sentinel.tool_called'
     && row.tool === 'sequentialthinking'));
-  assert.ok(telemetryRows.some((row) => row.event === 'reflect.tool_completed'
+  assert.ok(telemetryRows.some((row) => row.event === 'sentinel.tool_completed'
     && row.tool === 'sequentialthinking'
     && row.outcome === 'delivered'
     && row.delivery_state === 'stdio_flushed'));
@@ -439,7 +439,7 @@ try {
     ['failed', 'timeout'],
     ['cancelled', 'cancelled_by_client'],
   ]) {
-    assert.ok(telemetryRows.some((row) => row.event === 'reflect.tool_completed'
+    assert.ok(telemetryRows.some((row) => row.event === 'sentinel.tool_completed'
       && row.outcome === outcome && row.reason === reason));
   }
   for (const row of telemetryRows) {
@@ -511,8 +511,8 @@ try {
   assert.deepEqual(teardownOutcome, { code: 0 });
   assert.equal(teardownStderr, '');
   const teardownTelemetry = readTelemetry(teardownTelemetryPath);
-  assert.ok(teardownTelemetry.some((row) => row.event === 'reflect.process_started'));
-  assert.ok(teardownTelemetry.some((row) => row.event === 'reflect.process_stopped'
+  assert.ok(teardownTelemetry.some((row) => row.event === 'sentinel.process_started'));
+  assert.ok(teardownTelemetry.some((row) => row.event === 'sentinel.process_stopped'
     && row.reason === 'transport_closed' && row.exit_code === 0));
 
   const boundedTelemetryPath = join(telemetryDirectory, 'bounded.jsonl');

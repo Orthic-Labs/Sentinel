@@ -4,11 +4,27 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { ReflectCore } from '../lib/core.js';
+import { BeaconCore, ReflectCore, parseLocator } from '../lib/core.js';
 import { createStore } from '../lib/store.js';
 import { resolveDocs } from '../lib/docs.js';
+import { ensureHostToken, doctor } from '../lib/host.js';
+import { buildRetryFingerprint } from '../lib/budget.js';
 
-const root = mkdtempSync(join(tmpdir(), 'tether-v2-'));
+const hostDataDir = mkdtempSync(join(tmpdir(), 'beacon-host-'));
+ensureHostToken(hostDataDir);
+const hostToken = readFileSync(join(hostDataDir, 'host.token'), 'utf8').trim();
+function hookEnv(extra = {}) {
+  return {
+    ...process.env,
+    TETHER_HOST_DATA: hostDataDir,
+    BEACON_HOST_DATA: hostDataDir,
+    TETHER_HOST_TOKEN: hostToken,
+    BEACON_HOST_TOKEN: hostToken,
+    ...extra,
+  };
+}
+
+const root = mkdtempSync(join(tmpdir(), 'beacon-v2-'));
 const project = join(root, 'project');
 mkdirSync(join(project, 'node_modules', 'demo-lib'), { recursive: true });
 writeFileSync(join(project, 'package.json'), JSON.stringify({ dependencies: { 'demo-lib': '1.2.3' }}));
@@ -17,7 +33,8 @@ writeFileSync(join(project, 'node_modules', 'demo-lib', 'package.json'), JSON.st
 writeFileSync(join(project, 'node_modules', 'demo-lib', 'README.md'), '# Client\nUse configure client middleware.\n');
 
 const store = createStore(join(project, '.tether'));
-const core = new ReflectCore({ projectRoot: project, store });
+const core = new BeaconCore({ projectRoot: project, store });
+assert.equal(ReflectCore, BeaconCore);
 assert.throws(
   () => core.assess({ run_id: 'invalid-claim-run', summary: 'Reject malformed claim', claims: ['not-an-object'] }),
   /claim must be an object/,
@@ -34,16 +51,21 @@ const mcpSchema = spawnSync(process.execPath, [join(fileURLToPath(new URL('..', 
 assert.equal(mcpSchema.status, 0, mcpSchema.stderr);
 const mcpResponses = mcpSchema.stdout.trim().split('\n').map((line) => JSON.parse(line));
 const tetherSchema = mcpResponses.find((response) => response.id === 2).result.tools.find((tool) => tool.name === 'tether').inputSchema;
+const sentinelSchema = mcpResponses.find((response) => response.id === 2).result.tools.find((tool) => tool.name === 'sentinel').inputSchema;
 assert.equal(tetherSchema.properties.claims.items.type, 'object');
 assert.equal(tetherSchema.properties.evidence.items.type, 'object');
 assert.equal(tetherSchema.properties.checks.items.type, 'object');
+assert.equal(tetherSchema.properties.evidence.items.properties.trust_class, undefined);
+assert.equal(tetherSchema.properties.checks.items.properties.executor, undefined);
+assert.equal(tetherSchema.properties.checks.items.properties.status, undefined);
+assert.equal(sentinelSchema.properties.evidence.items.properties.trust_class, undefined);
 assert.deepEqual(tetherSchema.allOf[0].then.required, ['summary']);
 assert.deepEqual(tetherSchema.allOf[0].else.required, ['run_id']);
 
 const unassessedRiskStore = join(root, 'unassessed-risk-store');
 const unassessedRiskHook = spawnSync(process.execPath, [join(fileURLToPath(new URL('..', import.meta.url)), 'hooks', 'generic', 'hook.js')], {
   cwd: project,
-  env: { ...process.env, TETHER_ROOT: fileURLToPath(new URL('..', import.meta.url)), TETHER_STORE_ROOT: unassessedRiskStore },
+  env: hookEnv({ TETHER_ROOT: fileURLToPath(new URL('..', import.meta.url)), TETHER_STORE_ROOT: unassessedRiskStore }),
   input: JSON.stringify({ hook_event_name: 'PreToolUse', session_id: 'unassessed-session', tool_input: { command: 'git push --force origin main' } }),
   encoding: 'utf8',
   windowsHide: true,
@@ -51,29 +73,29 @@ const unassessedRiskHook = spawnSync(process.execPath, [join(fileURLToPath(new U
 assert.equal(unassessedRiskHook.status, 1, unassessedRiskHook.stderr);
 assert.deepEqual(JSON.parse(unassessedRiskHook.stdout), {
   action: 'block',
-  reason: 'high-risk command requires Tether assess before execution',
+  reason: 'high-risk command requires Beacon assess before execution',
 });
 const unassessedSuccessHook = spawnSync(process.execPath, [join(fileURLToPath(new URL('..', import.meta.url)), 'hooks', 'generic', 'hook.js')], {
   cwd: project,
-  env: { ...process.env, TETHER_ROOT: fileURLToPath(new URL('..', import.meta.url)), TETHER_STORE_ROOT: unassessedRiskStore },
+  env: hookEnv({ TETHER_ROOT: fileURLToPath(new URL('..', import.meta.url)), TETHER_STORE_ROOT: unassessedRiskStore }),
   input: JSON.stringify({ hook_event_name: 'PostToolUse', tool_name: 'shell', tool_input: { command: 'node --version' } }),
   encoding: 'utf8',
   windowsHide: true,
 });
 assert.equal(unassessedSuccessHook.status, 0, unassessedSuccessHook.stderr);
 assert.deepEqual(JSON.parse(unassessedSuccessHook.stdout), {
-  action: 'noop',
-  reason: 'no active tether run',
+  action: 'enforcement_degraded',
+  reason: 'no active beacon run',
 });
 
 const ambiguousStoreRoot = join(root, 'ambiguous-store');
 const ambiguousStore = createStore(ambiguousStoreRoot);
-const ambiguousCore = new ReflectCore({ projectRoot: project, store: ambiguousStore });
+const ambiguousCore = new BeaconCore({ projectRoot: project, store: ambiguousStore });
 ambiguousCore.assess({ summary: 'First unrelated task' });
 ambiguousCore.assess({ summary: 'Second unrelated task' });
 const recursiveAmbiguousStop = spawnSync(process.execPath, [join(fileURLToPath(new URL('..', import.meta.url)), 'hooks', 'generic', 'hook.js')], {
   cwd: project,
-  env: { ...process.env, TETHER_ROOT: fileURLToPath(new URL('..', import.meta.url)), TETHER_STORE_ROOT: ambiguousStoreRoot },
+  env: hookEnv({ TETHER_ROOT: fileURLToPath(new URL('..', import.meta.url)), TETHER_STORE_ROOT: ambiguousStoreRoot }),
   input: JSON.stringify({ hook_event_name: 'Stop', session_id: 'recursive-session', stop_hook_active: true }),
   encoding: 'utf8',
   windowsHide: true,
@@ -85,19 +107,19 @@ assert.deepEqual(JSON.parse(recursiveAmbiguousStop.stdout), {
 });
 const idleAmbiguousStop = spawnSync(process.execPath, [join(fileURLToPath(new URL('..', import.meta.url)), 'hooks', 'generic', 'hook.js')], {
   cwd: project,
-  env: { ...process.env, TETHER_ROOT: fileURLToPath(new URL('..', import.meta.url)), TETHER_STORE_ROOT: ambiguousStoreRoot },
+  env: hookEnv({ TETHER_ROOT: fileURLToPath(new URL('..', import.meta.url)), TETHER_STORE_ROOT: ambiguousStoreRoot }),
   input: JSON.stringify({ hook_event_name: 'Stop', session_id: 'idle-session' }),
   encoding: 'utf8',
   windowsHide: true,
 });
 assert.equal(idleAmbiguousStop.status, 0, idleAmbiguousStop.stderr);
 assert.deepEqual(JSON.parse(idleAmbiguousStop.stdout), {
-  action: 'noop',
-  reason: 'no active tether run',
+  action: 'enforcement_degraded',
+  reason: 'no active beacon run',
 });
 const riskyAmbiguousUse = spawnSync(process.execPath, [join(fileURLToPath(new URL('..', import.meta.url)), 'hooks', 'generic', 'hook.js')], {
   cwd: project,
-  env: { ...process.env, TETHER_ROOT: fileURLToPath(new URL('..', import.meta.url)), TETHER_STORE_ROOT: ambiguousStoreRoot },
+  env: hookEnv({ TETHER_ROOT: fileURLToPath(new URL('..', import.meta.url)), TETHER_STORE_ROOT: ambiguousStoreRoot }),
   input: JSON.stringify({ hook_event_name: 'PreToolUse', session_id: 'risky-session', tool_input: { command: 'git push --force origin main' } }),
   encoding: 'utf8',
   windowsHide: true,
@@ -107,22 +129,24 @@ assert.equal(JSON.parse(riskyAmbiguousUse.stdout).action, 'block');
 
 const assessed = core.assess({ summary: 'Fix client middleware', task_kind: 'feature', claims: [{ text: 'configure is the installed API', kind: 'versioned_api', materiality: 'critical' }] });
 assert.equal(assessed.decision, 'proceed');
-const sessionBinding = core.resolveSession({ session_id: 'claude-session-1' });
+assert.deepEqual(core.resolveSession({ session_id: 'claude-session-1' }), { run_id: null, status: 'unbound', reason: 'explicit_run_id_required' });
+const sessionBinding = core.resolveSession({ session_id: 'claude-session-1', run_id: assessed.run_id });
 assert.deepEqual(sessionBinding, { run_id: assessed.run_id, status: 'bound' });
 assert.equal(store.get('session_bindings', 'claude-session-1').run_id, assessed.run_id);
 const enforcedHook = spawnSync(process.execPath, [join(fileURLToPath(new URL('..', import.meta.url)), 'hooks', 'generic', 'hook.js')], {
   cwd: project,
-  env: { ...process.env, TETHER_ROOT: fileURLToPath(new URL('..', import.meta.url)), TETHER_STORE_ROOT: join(project, '.tether') },
-  input: JSON.stringify({ hook_event_name: 'PreToolUse', session_id: 'claude-session-2', tool_input: { command: 'rm -rf build-output' } }),
+  env: hookEnv({ TETHER_ROOT: fileURLToPath(new URL('..', import.meta.url)), TETHER_STORE_ROOT: join(project, '.tether') }),
+  input: JSON.stringify({ hook_event_name: 'PreToolUse', session_id: 'claude-session-1', tool_input: { command: 'rm -rf build-output' } }),
   encoding: 'utf8',
   windowsHide: true,
 });
 assert.equal(enforcedHook.status, 1, enforcedHook.stderr);
 const enforcedHookResult = JSON.parse(enforcedHook.stdout);
 assert.equal(enforcedHookResult.action, 'block');
+assert.equal(enforcedHookResult.reason, 'high-risk gate unmet');
 const inProcessGenericHook = spawnSync(process.execPath, ['-e', `const { evaluate } = require(${JSON.stringify(join(fileURLToPath(new URL('..', import.meta.url)), 'hooks', 'generic', 'hook.js'))}); process.stdout.write(JSON.stringify(evaluate(${JSON.stringify({ hook_event_name: 'PreToolUse', run_id: assessed.run_id, tool_input: { command: 'rm -rf build-output' } })})));`], {
   cwd: project,
-  env: { ...process.env, TETHER_ROOT: fileURLToPath(new URL('..', import.meta.url)), TETHER_STORE_ROOT: join(project, '.tether') },
+  env: hookEnv({ TETHER_ROOT: fileURLToPath(new URL('..', import.meta.url)), TETHER_STORE_ROOT: join(project, '.tether') }),
   encoding: 'utf8',
   windowsHide: true,
 });
@@ -133,19 +157,21 @@ assert.deepEqual(
     action: inProcessGenericHookResult.action,
     reason: inProcessGenericHookResult.reason,
     decision: inProcessGenericHookResult.result.decision,
-    gate: inProcessGenericHookResult.result.gate,
+    gate_ok: inProcessGenericHookResult.result.gate?.ok,
+    deficits: inProcessGenericHookResult.result.gate?.deficits,
   },
   {
     action: enforcedHookResult.action,
     reason: enforcedHookResult.reason,
     decision: enforcedHookResult.result.decision,
-    gate: enforcedHookResult.result.gate,
+    gate_ok: enforcedHookResult.result.gate?.ok,
+    deficits: enforcedHookResult.result.gate?.deficits,
   },
 );
 const failureHook = spawnSync(process.execPath, [join(fileURLToPath(new URL('..', import.meta.url)), 'hooks', 'generic', 'hook.js')], {
   cwd: project,
-  env: { ...process.env, TETHER_ROOT: fileURLToPath(new URL('..', import.meta.url)), TETHER_STORE_ROOT: join(project, '.tether') },
-  input: JSON.stringify({ hook_event_name: 'PostToolUse', session_id: 'claude-session-3', tool_name: 'shell', error: 'command failed' }),
+  env: hookEnv({ TETHER_ROOT: fileURLToPath(new URL('..', import.meta.url)), TETHER_STORE_ROOT: join(project, '.tether') }),
+  input: JSON.stringify({ hook_event_name: 'PostToolUse', run_id: assessed.run_id, tool_name: 'shell', error: 'command failed' }),
   encoding: 'utf8',
   windowsHide: true,
 });
@@ -153,7 +179,7 @@ assert.equal(failureHook.status, 0, failureHook.stderr);
 assert.equal(JSON.parse(failureHook.stdout).action, 'continue');
 const successfulHook = spawnSync(process.execPath, [join(fileURLToPath(new URL('..', import.meta.url)), 'hooks', 'generic', 'hook.js')], {
   cwd: project,
-  env: { ...process.env, TETHER_ROOT: fileURLToPath(new URL('..', import.meta.url)), TETHER_STORE_ROOT: join(project, '.tether') },
+  env: hookEnv({ TETHER_ROOT: fileURLToPath(new URL('..', import.meta.url)), TETHER_STORE_ROOT: join(project, '.tether') }),
   input: JSON.stringify({
     hook_event_name: 'PostToolUse',
     run_id: assessed.run_id,
@@ -165,11 +191,11 @@ const successfulHook = spawnSync(process.execPath, [join(fileURLToPath(new URL('
   windowsHide: true,
 });
 assert.equal(successfulHook.status, 0, successfulHook.stderr);
-assert.equal(JSON.parse(successfulHook.stdout).action, 'continue');
-const trustedHookCheck = store.list('checks').find((row) => row.command === 'node --version');
-assert.equal(trustedHookCheck.authority, 'hook');
-assert.equal(trustedHookCheck.executor, 'hook');
-assert.equal(trustedHookCheck.status, 'passed');
+assert.deepEqual(JSON.parse(successfulHook.stdout), {
+  action: 'continue',
+  reason: 'tool success is not auto-recorded as a passing check',
+});
+assert.equal(store.list('checks').some((row) => row.command === 'node --version'), false);
 const spoofedHookCli = spawnSync(process.execPath, [join(fileURLToPath(new URL('..', import.meta.url)), 'cli.js'), 'verify', '--hook', '--json'], {
   cwd: project,
   input: JSON.stringify({ run_id: assessed.run_id, checks: [{ kind: 'test', status: 'passed' }] }),
@@ -178,9 +204,11 @@ const spoofedHookCli = spawnSync(process.execPath, [join(fileURLToPath(new URL('
 });
 assert.notEqual(spoofedHookCli.status, 0);
 assert.match(spoofedHookCli.stderr, /trusted host caller/);
+core.resolveSession({ session_id: 'codex-session-1', run_id: assessed.run_id });
+core.resolveSession({ session_id: 'claude-session-4', run_id: assessed.run_id });
 const codexHook = spawnSync(process.execPath, [join(fileURLToPath(new URL('..', import.meta.url)), 'hooks', 'codex', 'hook.js')], {
   cwd: project,
-  env: { ...process.env, CODEX_SESSION_ID: 'codex-session-1', TETHER_STORE_ROOT: join(project, '.tether') },
+  env: hookEnv({ CODEX_SESSION_ID: 'codex-session-1', TETHER_STORE_ROOT: join(project, '.tether') }),
   input: JSON.stringify({ hook_event_name: 'PreToolUse', tool_input: { command: 'rm -rf build-output' } }),
   encoding: 'utf8',
   windowsHide: true,
@@ -193,7 +221,7 @@ assert.deepEqual(JSON.parse(codexHook.stdout), {
 });
 const claudeHook = spawnSync(process.execPath, [join(fileURLToPath(new URL('..', import.meta.url)), 'hooks', 'claude-code', 'hook.js')], {
   cwd: project,
-  env: { ...process.env, CLAUDE_SESSION_ID: 'claude-session-4', TETHER_STORE_ROOT: join(project, '.tether') },
+  env: hookEnv({ CLAUDE_SESSION_ID: 'claude-session-4', TETHER_STORE_ROOT: join(project, '.tether') }),
   input: JSON.stringify({ hook_event_name: 'PreToolUse', tool_input: { command: 'rm -rf build-output' } }),
   encoding: 'utf8',
   windowsHide: true,
@@ -241,7 +269,7 @@ assert.equal(blockedClose.decision, 'blocked');
 assert.ok(blockedClose.gate.deficits.some((deficit) => deficit.code === 'insufficient_repo_evidence'));
 
 // Real evidence: the locator resolves, the excerpt is present, so the core hashes the source itself.
-core.checkpoint({ run_id: assessed.run_id, claim_updates: [{ id: claim.id, status: 'supported' }], evidence: [{ kind: 'docs', trust_class: 'tool', claim_ids: [claim.id], excerpt: 'installed source supports configure' }, { kind: 'repo', trust_class: 'tool', claim_ids: [claim.id], locator: 'package.json', excerpt: 'demo-lib' }] });
+core.checkpoint({ run_id: assessed.run_id, claim_updates: [{ id: claim.id, status: 'supported' }], evidence: [{ kind: 'docs', trust_class: 'tool', claim_ids: [claim.id], excerpt: 'installed source supports configure' }, { kind: 'repo', trust_class: 'tool', claim_ids: [claim.id], locator: 'package.json', excerpt: 'demo-lib' }] }, 'operator');
 const attested = store.list('evidence').find((row) => row.attested === true);
 assert.equal(attested.attestation_reason, 'verified_against_source');
 assert.match(attested.content_hash, /^sha256:[0-9a-f]{64}$/);
@@ -254,23 +282,23 @@ assert.ok(existsSync(join(project, '.tether', 'events.jsonl')));
 assert.throws(() => core.checkpoint({ run_id: assessed.run_id, evidence: [{ kind: 'docs', trust_class: 'tool', excerpt: 'late mutation' }] }), /closed run/);
 
 const spoofed = core.assess({ summary: 'Reject spoofed check', task_kind: 'feature', claims: [{ id: 'spoofed-claim', text: 'package is present', kind: 'local_fact', materiality: 'critical' }] });
-core.checkpoint({ run_id: spoofed.run_id, claim_updates: [{ id: 'spoofed-claim', status: 'supported' }], evidence: [{ kind: 'docs', trust_class: 'tool', claim_ids: ['spoofed-claim'], excerpt: 'package docs exist' }, { kind: 'repo', trust_class: 'tool', claim_ids: ['spoofed-claim'], locator: 'package.json', excerpt: 'demo-lib' }] });
+core.checkpoint({ run_id: spoofed.run_id, claim_updates: [{ id: 'spoofed-claim', status: 'supported' }], evidence: [{ kind: 'docs', trust_class: 'tool', claim_ids: ['spoofed-claim'], excerpt: 'package docs exist' }, { kind: 'repo', trust_class: 'tool', claim_ids: ['spoofed-claim'], locator: 'package.json', excerpt: 'demo-lib' }] }, 'operator');
 core.verify({ run_id: spoofed.run_id, checks: [{ kind: 'test', specification: 'spoofed', executor: 'host', status: 'passed', output: 'model said ok' }] }, 'model');
 const spoofedClose = core.close({ run_id: spoofed.run_id });
 assert.equal(spoofedClose.decision, 'blocked');
 assert.ok(spoofedClose.gate.deficits.some((deficit) => deficit.code === 'insufficient_passing_checks'));
 
 const unlinked = core.assess({ summary: 'Reject unlinked evidence', task_kind: 'feature', claims: [{ id: 'unlinked-claim', text: 'claim needs its own proof', kind: 'local_fact', materiality: 'critical' }] });
-core.checkpoint({ run_id: unlinked.run_id, claim_updates: [{ id: 'unlinked-claim', status: 'supported' }], evidence: [{ kind: 'docs', trust_class: 'tool', excerpt: 'generic docs exist' }, { kind: 'repo', trust_class: 'tool', locator: 'package.json', excerpt: 'demo-lib' }] });
+core.checkpoint({ run_id: unlinked.run_id, claim_updates: [{ id: 'unlinked-claim', status: 'supported' }], evidence: [{ kind: 'docs', trust_class: 'tool', excerpt: 'generic docs exist' }, { kind: 'repo', trust_class: 'tool', locator: 'package.json', excerpt: 'demo-lib' }] }, 'operator');
 core.verify({ run_id: unlinked.run_id, checks: [{ kind: 'test', specification: 'real', executor: 'host', status: 'passed', output: 'ok' }] }, 'operator');
 const unlinkedClose = core.close({ run_id: unlinked.run_id });
 assert.equal(unlinkedClose.decision, 'blocked');
-assert.ok(unlinkedClose.gate.deficits.some((deficit) => deficit.code === 'supported_claim_without_evidence'));
+assert.ok(unlinkedClose.gate.deficits.some((deficit) => deficit.code === 'supported_claim_without_matching_evidence'));
 
 const liveFile = join(project, 'live.js');
 writeFileSync(liveFile, 'export const value = "before";\n');
 const stale = core.assess({ summary: 'Reject stale source evidence', task_kind: 'feature', claims: [{ id: 'stale-claim', text: 'live value is before', kind: 'local_fact', materiality: 'critical' }] });
-core.checkpoint({ run_id: stale.run_id, claim_updates: [{ id: 'stale-claim', status: 'supported' }], evidence: [{ kind: 'docs', trust_class: 'tool', claim_ids: ['stale-claim'], excerpt: 'runtime docs exist' }, { kind: 'repo', trust_class: 'tool', claim_ids: ['stale-claim'], locator: 'live.js', excerpt: 'before' }] });
+core.checkpoint({ run_id: stale.run_id, claim_updates: [{ id: 'stale-claim', status: 'supported' }], evidence: [{ kind: 'docs', trust_class: 'tool', claim_ids: ['stale-claim'], excerpt: 'runtime docs exist' }, { kind: 'repo', trust_class: 'tool', claim_ids: ['stale-claim'], locator: 'live.js', excerpt: 'before' }] }, 'operator');
 core.verify({ run_id: stale.run_id, checks: [{ kind: 'test', specification: 'real', executor: 'host', status: 'passed', output: 'ok' }] }, 'operator');
 writeFileSync(liveFile, 'export const value = "after";\n');
 const staleClose = core.close({ run_id: stale.run_id });
@@ -304,7 +332,7 @@ assert.notEqual(secondDocsPage.items[0].locator, firstDocsPage.items[0].locator)
 
 const riskyHook = spawnSync(process.execPath, [join(fileURLToPath(new URL('..', import.meta.url)), 'hooks', 'generic', 'hook.js')], {
   cwd: project,
-  env: { ...process.env, TETHER_ROOT: fileURLToPath(new URL('..', import.meta.url)), TETHER_STORE_ROOT: join(project, '.tether') },
+  env: hookEnv({ TETHER_ROOT: fileURLToPath(new URL('..', import.meta.url)), TETHER_STORE_ROOT: join(project, '.tether') }),
   input: JSON.stringify({ hook_event_name: 'PreToolUse', run_id: waiverRun.run_id, tool_input: { command: 'git push -f origin main' } }),
   encoding: 'utf8',
   windowsHide: true,
@@ -318,10 +346,172 @@ const rejectedOperator = spawnSync(process.execPath, ['cli.js', 'assess', '--ope
 assert.equal(rejectedOperator.status, 1);
 assert.match(rejectedOperator.stderr, /trusted host caller/);
 const cli = spawnSync(process.execPath, ['cli.js', 'assess', '--operator', '--json', '--store', join(root, 'cli-store')], {
-  cwd: fileURLToPath(new URL('..', import.meta.url)), env: { ...process.env, TETHER_TRUSTED_CALLER: 'hook' }, input: JSON.stringify({ summary: 'CLI smoke' }), encoding: 'utf8',
+  cwd: fileURLToPath(new URL('..', import.meta.url)), env: hookEnv(), input: JSON.stringify({ summary: 'CLI smoke' }), encoding: 'utf8',
 });
 assert.equal(cli.status, 0, cli.stderr);
 assert.equal(JSON.parse(cli.stdout).decision, 'skip');
 assert.equal(JSON.parse(readFileSync(join(root, 'cli-store', 'events.jsonl'), 'utf8').split('\n')[0]).table, 'runs');
 
-console.log('tether v2 tests passed');
+const criterionRun = core.assess({
+  summary: 'Criterion-gated feature',
+  task_kind: 'feature',
+  acceptance_criteria: [{ criterion: 'tests pass', verification: ['npm test'], required_evidence_kinds: ['repo'] }],
+  claims: [{ id: 'criterion-claim', text: 'tests are green', kind: 'behavioral_fact', materiality: 'critical' }],
+});
+core.checkpoint({
+  run_id: criterionRun.run_id,
+  claim_updates: [{ id: 'criterion-claim', status: 'supported' }],
+  evidence: [{ kind: 'repo', trust_class: 'tool', claim_ids: ['criterion-claim'], criterion_id: 'criterion-0', locator: 'package.json', excerpt: 'demo-lib' }],
+}, 'operator');
+core.verify({ run_id: criterionRun.run_id, checks: [{ kind: 'test', specification: 'npm test', criterion_id: 'criterion-0', executor: 'host', status: 'passed', output: 'ok' }] }, 'operator');
+const criterionBlocked = core.close({ run_id: criterionRun.run_id });
+assert.equal(criterionBlocked.decision, 'blocked');
+assert.ok(criterionBlocked.gate.deficits.some((deficit) => deficit.code === 'supported_claim_without_matching_evidence'));
+core.checkpoint({
+  run_id: criterionRun.run_id,
+  evidence: [{ kind: 'test', trust_class: 'tool', claim_ids: ['criterion-claim'], excerpt: 'all tests passed' }],
+}, 'operator');
+const criterionClosed = core.close({ run_id: criterionRun.run_id });
+assert.equal(criterionClosed.decision, 'closed');
+
+const wrongClassRun = core.assess({
+  summary: 'Reject wrong evidence class',
+  claims: [{ id: 'wrong-class-claim', text: 'file contains marker', kind: 'local_fact', materiality: 'critical' }],
+});
+core.checkpoint({
+  run_id: wrongClassRun.run_id,
+  claim_updates: [{ id: 'wrong-class-claim', status: 'supported' }],
+  evidence: [{ kind: 'docs', trust_class: 'tool', claim_ids: ['wrong-class-claim'], excerpt: 'only docs, no repo proof' }],
+}, 'operator');
+core.verify({ run_id: wrongClassRun.run_id, checks: [{ kind: 'test', specification: 'smoke', executor: 'host', status: 'passed', output: 'ok' }] }, 'operator');
+const wrongClassClose = core.close({ run_id: wrongClassRun.run_id });
+assert.equal(wrongClassClose.decision, 'blocked');
+assert.ok(wrongClassClose.gate.deficits.some((deficit) => deficit.code === 'supported_claim_without_matching_evidence'));
+
+// --- P1/P2 additions ---
+
+// Region hash + Windows-safe locator parser
+writeFileSync(join(project, 'region.js'), 'line1\nTARGET_REGION\nline3\n');
+const winLocator = parseLocator(null, 'C:\\Users\\demo\\project\\region.js:2-2');
+assert.equal(winLocator.file, 'C:\\Users\\demo\\project\\region.js');
+assert.equal(winLocator.startLine, 2);
+assert.equal(winLocator.endLine, 2);
+const ranged = core.assess({ summary: 'Region hash', claims: [{ id: 'region-claim', text: 'region marker', kind: 'local_fact', materiality: 'critical' }] });
+core.checkpoint({
+  run_id: ranged.run_id,
+  evidence: [{ kind: 'repo', locator: 'region.js:2-2', excerpt: 'TARGET_REGION' }],
+});
+const rangedEv = store.list('evidence').find((row) => row.locator === 'region.js:2-2');
+assert.equal(rangedEv.attested, true);
+assert.equal(rangedEv.attestation_reason, 'verified_region_against_source');
+assert.match(rangedEv.content_hash, /^sha256:[0-9a-f]{64}$/);
+
+// Improved retry fingerprint: same command with different error class ≠ same fingerprint
+const fpA = buildRetryFingerprint({ command: 'npm test', observed_failure: 'AssertionError: expected true' });
+const fpB = buildRetryFingerprint({ command: 'npm test', observed_failure: 'ENOENT: no such file' });
+assert.notEqual(fpA, fpB);
+assert.match(fpA, /^sha256:/);
+
+// Conversational Stop ≠ completion
+const convStop = spawnSync(process.execPath, [join(fileURLToPath(new URL('..', import.meta.url)), 'hooks', 'generic', 'hook.js')], {
+  cwd: project,
+  env: hookEnv({ TETHER_ROOT: fileURLToPath(new URL('..', import.meta.url)), TETHER_STORE_ROOT: join(project, '.tether') }),
+  input: JSON.stringify({ hook_event_name: 'Stop', session_id: 'claude-session-1' }),
+  encoding: 'utf8',
+  windowsHide: true,
+});
+assert.equal(convStop.status, 0, convStop.stderr);
+assert.deepEqual(JSON.parse(convStop.stdout), { action: 'noop', reason: 'conversational_stop' });
+
+// Execution contract CheckSpec matching
+const contractRun = core.assess({
+  summary: 'Contract-bound criterion',
+  task_kind: 'feature',
+  acceptance_criteria: [{
+    criterion: 'contract tests',
+    execution_contract: { check_specs: ['npm test -- contract'], preflight: true },
+    required_evidence_kinds: ['repo'],
+  }],
+  claims: [{ id: 'contract-claim', text: 'contract holds', kind: 'behavioral_fact', materiality: 'critical' }],
+});
+core.checkpoint({
+  run_id: contractRun.run_id,
+  claim_updates: [{ id: 'contract-claim', status: 'supported' }],
+  evidence: [
+    { kind: 'repo', claim_ids: ['contract-claim'], criterion_id: 'criterion-0', locator: 'package.json', excerpt: 'demo-lib' },
+    { kind: 'test', trust_class: 'tool', claim_ids: ['contract-claim'], excerpt: 'contract ok' },
+  ],
+}, 'operator');
+const contractVerify = core.verify({
+  run_id: contractRun.run_id,
+  checks: [{ kind: 'test', specification: 'npm test -- contract', criterion_id: 'criterion-0', executor: 'host', status: 'passed', output: 'ok' }],
+}, 'operator');
+assert.equal(contractVerify.preflight.stub, true);
+const contractClosed = core.close({ run_id: contractRun.run_id });
+assert.equal(contractClosed.decision, 'closed');
+
+// Blueprint orientation hook point
+const bpRun = core.assess({ summary: 'Blueprint orientation', claims: [{ id: 'bp-claim', text: 'oriented', kind: 'local_fact', materiality: 'useful' }] });
+core.checkpoint({
+  run_id: bpRun.run_id,
+  evidence: [{ kind: 'blueprint_orientation', blueprint_receipt: 'orient-1', excerpt: 'flows mapped' }],
+}, 'hook');
+assert.equal(store.list('evidence').find((row) => row.kind === 'blueprint_orientation').blueprint_orientation, true);
+
+// Incremental store projection still reads appended events
+const incrRoot = join(root, 'incr-store');
+const incrStore = createStore(incrRoot);
+incrStore.append('runs', { id: 'incr-1', summary: 'a', status: 'open' });
+incrStore.append('retry_budget', { id: 'rb-1', run_id: 'incr-1', fingerprint: 'x', count: 1 });
+assert.equal(incrStore.get('runs', 'incr-1').summary, 'a');
+assert.equal(incrStore.list('retry_budget').length, 1);
+
+// doctor + init
+const doctorResult = doctor(project);
+assert.equal(doctorResult.product, 'sentinel');
+assert.equal(doctorResult.ok, true);
+const initCli = spawnSync(process.execPath, ['cli.js', 'init', '--json'], {
+  cwd: fileURLToPath(new URL('..', import.meta.url)),
+  env: hookEnv(),
+  encoding: 'utf8',
+});
+assert.equal(initCli.status, 0, initCli.stderr);
+assert.equal(JSON.parse(initCli.stdout).host_token_initialized, true);
+
+// E2E lifecycle: assess → evidence → verify → completion-intent Stop closes
+const e2eStoreRoot = join(root, 'e2e-store');
+const e2eStore = createStore(e2eStoreRoot);
+const e2eCore = new BeaconCore({ projectRoot: project, store: e2eStore });
+const e2e = e2eCore.assess({
+  summary: 'E2E lifecycle',
+  task_kind: 'feature',
+  session_id: 'e2e-session',
+  task_id: 'e2e-task',
+  claims: [{ id: 'e2e-claim', text: 'package present', kind: 'local_fact', materiality: 'critical' }],
+});
+e2eCore.checkpoint({
+  run_id: e2e.run_id,
+  claim_updates: [{ id: 'e2e-claim', status: 'supported' }],
+  evidence: [
+    { kind: 'docs', claim_ids: ['e2e-claim'], locator: 'package.json', excerpt: 'demo-lib' },
+    { kind: 'repo', claim_ids: ['e2e-claim'], locator: 'package.json', excerpt: 'demo-lib' },
+  ],
+}, 'operator');
+e2eCore.verify({
+  run_id: e2e.run_id,
+  checks: [{ kind: 'test', specification: 'e2e', executor: 'host', status: 'passed', output: 'ok' }],
+}, 'operator');
+const e2eStop = spawnSync(process.execPath, [join(fileURLToPath(new URL('..', import.meta.url)), 'hooks', 'generic', 'hook.js')], {
+  cwd: project,
+  env: hookEnv({ TETHER_ROOT: fileURLToPath(new URL('..', import.meta.url)), TETHER_STORE_ROOT: e2eStoreRoot }),
+  input: JSON.stringify({ hook_event_name: 'Stop', session_id: 'e2e-session', completion_intent: true }),
+  encoding: 'utf8',
+  windowsHide: true,
+});
+assert.equal(e2eStop.status, 0, e2eStop.stderr);
+const e2eStopResult = JSON.parse(e2eStop.stdout);
+assert.equal(e2eStopResult.action, 'allow');
+assert.equal(e2eStopResult.closed, true);
+assert.equal(e2eStore.get('runs', e2e.run_id).status, 'closed');
+
+console.log('sentinel v2 tests passed');

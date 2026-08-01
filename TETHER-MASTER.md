@@ -1,7 +1,7 @@
 # Tether v2 — Master Synthesis, Adjudication, and Implementation Guide
 
 > **Tether** — keep the agent tied to what is actually true.
-> Repository: <https://github.com/Orthic-Labs/Tether> · npm: `@orthic-labs/tether`
+> Repository: <https://github.com/Orthic-Labs/Sentinel> · npm: `@orthic-labs/tether` (compatibility package id)
 >
 > **On the name (settled 2026-07-26).** The design was synthesized under the name **REFLECT** —
 > *Recursive Evidence Framework for Learning, Execution, Context and Thought*, proposed by the
