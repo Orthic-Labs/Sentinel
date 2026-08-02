@@ -1,12 +1,3 @@
-# Runtime state written by the sentinel core (claims, evidence, checks, payloads).
-# Never commit: it contains project-specific excerpts and locators.
-.sentinel/
-# Pre-rename store directory, still ignored so old working copies stay clean.
-.reflect/
-
-# Docs/source cache and telemetry (eval fixtures under eval/ stay tracked)
-.cache/
-
-node_modules/
-npm-debug.log*
-.DS_Store
+.agent/
+.audit/
+.blueprint/
