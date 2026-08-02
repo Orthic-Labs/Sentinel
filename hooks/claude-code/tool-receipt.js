@@ -2,6 +2,8 @@
 'use strict';
 
 const crypto = require('node:crypto');
+const fs = require('node:fs');
+const path = require('node:path');
 const { appendObservableEvent } = require('../observable-ingress.js');
 const { buildObservableEvent } = require('../observable-event.js');
 
@@ -17,6 +19,26 @@ function defaultClient(env = process.env) {
 function first(event, keys, fallback = '') {
   for (const key of keys) if (event[key] !== undefined && event[key] !== null) return event[key];
   return fallback;
+}
+
+function activeTrace(event, env = process.env, nowMs = Date.now()) {
+  const sessionId = String(first(event, ['session_id', 'sessionId'], '')).trim();
+  if (!sessionId) return null;
+  const root = env.MEMBRANE_ACTIVE_TRACE_DIR
+    || path.join(String(env.WORKSPACE_ROOT || first(event, ['cwd', 'working_directory'], process.cwd())), 'tools', '.cache', 'memory', 'active-traces');
+  const key = crypto.createHash('sha256').update(sessionId).digest('hex');
+  try {
+    const value = JSON.parse(fs.readFileSync(path.join(root, `${key}.json`), 'utf8'));
+    const ageMs = nowMs - Number(value.updated_at_ms);
+    if (value.schema !== 'membrane.active-trace.v1'
+      || value.session_id !== sessionId
+      || typeof value.trace_id !== 'string'
+      || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/.test(value.trace_id)
+      || !Number.isFinite(ageMs) || ageMs < 0 || ageMs > 5 * 60_000) return null;
+    return value.trace_id;
+  } catch {
+    return null;
+  }
 }
 
 function buildReceipt(event) {
@@ -57,10 +79,11 @@ function main() {
   if (!['PreToolUse', 'pre_tool_use', 'PostToolUse', 'post_tool_use', 'PostToolUseFailure', 'post_tool_use_failure'].includes(eventName)) return;
   const receipt = buildReceipt(event);
   const failed = receipt.exit_status !== 0;
+  const traceId = String(first(event, ['trace_id', 'traceId'], activeTrace(event) || receipt.tool_call_id));
   const observable = buildObservableEvent({
     installationId: String(first(event, ['installation_id', 'installationId'], 'host-installation')),
     clientId: defaultClient(), sessionId: String(first(event, ['session_id', 'sessionId'], 'host-session')),
-    taskId: receipt.task_id, turnId: receipt.turn_id, traceId: String(first(event, ['trace_id', 'traceId'], receipt.tool_call_id)),
+    taskId: receipt.task_id, turnId: receipt.turn_id, traceId,
     eventType: failed ? 'tool_receipt_failed' : 'tool_receipt', origin: 'tool', content: receipt,
     completeness: { input: true, output: !event.output_omitted, receipt: true },
     policyDigest: receipt.issuer_capability_digest, timestamp: receipt.completed_at,
@@ -70,4 +93,4 @@ function main() {
 }
 
 if (require.main === module) main();
-module.exports = { buildReceipt, defaultClient, digest, main };
+module.exports = { activeTrace, buildReceipt, defaultClient, digest, main };

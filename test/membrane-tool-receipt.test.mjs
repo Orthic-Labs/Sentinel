@@ -1,11 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { buildReceipt, defaultClient } from '../hooks/claude-code/tool-receipt.js';
+import { activeTrace, buildReceipt, defaultClient } from '../hooks/claude-code/tool-receipt.js';
 
 test('Claude tool receipt derives ccx identity from gateway URL', () => {
   assert.equal(defaultClient({ ANTHROPIC_BASE_URL: 'http://localhost:8801' }), 'ccx');
@@ -25,6 +26,18 @@ test('Claude tool receipt is hook-issued, typed, and content-free', () => {
   assert.match(receipt.output_digest, /^sha256:[0-9a-f]{64}$/);
   assert.match(receipt.source_generation_id, /^sha256:[0-9a-f]{64}$/);
   assert.doesNotMatch(JSON.stringify(receipt), /secret/);
+});
+
+test('Claude tool receipt reuses fresh prompt trace for same session', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'sentinel-active-trace-'));
+  const sessionId = 'dace5c62-31e7-4c35-a08d-ab7f00f0b027';
+  const key = createHash('sha256').update(sessionId).digest('hex');
+  writeFileSync(join(dir, `${key}.json`), JSON.stringify({
+    schema: 'membrane.active-trace.v1', session_id: sessionId,
+    trace_id: '6f6bca60-9373-48a3-b98f-a7ee68d5430b', updated_at_ms: 1_000,
+  }));
+  assert.equal(activeTrace({ session_id: sessionId }, { MEMBRANE_ACTIVE_TRACE_DIR: dir }, 1_100), '6f6bca60-9373-48a3-b98f-a7ee68d5430b');
+  assert.equal(activeTrace({ session_id: sessionId }, { MEMBRANE_ACTIVE_TRACE_DIR: dir }, 301_001), null);
 });
 
 test('Claude tool-receipt hook main path emits failure event without runtime error', () => {
