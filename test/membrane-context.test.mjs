@@ -8,6 +8,11 @@ const require = createRequire(import.meta.url);
 const adapter = require('../hooks/membrane-context.js');
 const fakeClient = fileURLToPath(new URL('./fixtures/membrane-client.mjs', import.meta.url));
 
+test('host adapter derives ccx identity from gateway URL', () => {
+  assert.equal(adapter.defaultClient({ ANTHROPIC_BASE_URL: 'http://127.0.0.1:8801' }), 'ccx');
+  assert.equal(adapter.defaultClient({ ANTHROPIC_BASE_URL: 'https://api.anthropic.com' }), 'host-adapter');
+});
+
 test('host adapter emits bounded data-only delivery heartbeat for canonical request', { concurrency: false }, () => {
   const root = path.resolve('/tmp');
   const request = adapter.buildRequest({ event: 'UserPromptSubmit', prompt: 'inspect current graph', session_id: 'session-1', turn_id: 'turn-1' }, root);

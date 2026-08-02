@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
 import test from "node:test";
+import { isTrustedHostTransport, projectStoreKey, resolveDefaultStoreRoot } from "../lib/host.js";
 
 const sentinelRoot = fileURLToPath(new URL("..", import.meta.url));
 const server = join(sentinelRoot, "server.js");
@@ -32,7 +33,7 @@ function startServer(storeRoot) {
   return { child, lines, request, notify };
 }
 
-test("host token turns CodeRight receipts into trusted signoff evidence", async () => {
+test("same-user bearer token cannot mint host authority", async () => {
   const storeRoot = mkdtempSync(join(tmpdir(), "sentinel-host-authority-"));
   const session = startServer(storeRoot);
   try {
@@ -42,31 +43,41 @@ test("host token turns CodeRight receipts into trusted signoff evidence", async 
     assert.equal(initialized.result.serverInfo.name, "sentinel");
     session.notify("notifications/initialized", {});
     const assess = await session.request(2, "tools/call", {
-      name: "sentinel", arguments: { operation: "assess", summary: "host task", host_token: "host-secret" },
-    });
-    const assessed = assess.result.structuredContent;
-    assert.equal(assessed.decision, "skip");
-    const receipt = JSON.stringify({ schema: "orthic.tool-receipt.v1", exit_status: 0, tool_call_id: "call-1" });
-    const checkpoint = await session.request(3, "tools/call", {
-      name: "sentinel",
-      arguments: {
-        operation: "checkpoint", run_id: assessed.run_id, host_token: "host-secret", summary: "tool receipt",
-        checks: [{ kind: "shell", specification: "test", receipt }],
-        evidence: [{ kind: "repo", receipt }, { kind: "test", receipt }],
+      name: "sentinel", arguments: {
+        operation: "assess", summary: "host task", host_token: "host-secret",
+        acceptance_criteria: [{ id: "host-receipt", criterion: "host receipt passes", verification: ["test"] }],
       },
     });
-    assert.equal(checkpoint.result.structuredContent.decision, "proceed_with_change");
-    const verified = await session.request(4, "tools/call", {
-      name: "sentinel", arguments: { operation: "verify", run_id: assessed.run_id, gate: "signoff", host_token: "host-secret" },
-    });
-    assert.equal(verified.result.structuredContent.decision, "proceed", JSON.stringify(verified.result.structuredContent));
-    const closed = await session.request(5, "tools/call", {
-      name: "sentinel", arguments: { operation: "close", run_id: assessed.run_id, summary: "done", host_token: "host-secret" },
-    });
-    assert.equal(closed.result.structuredContent.decision, "closed");
+    assert.equal(assess.result.isError, true);
+    assert.match(assess.result.content[0].text, /Unknown property: host_token/);
   } finally {
     session.child.kill();
     session.lines.close();
     rmSync(storeRoot, { recursive: true, force: true });
+  }
+});
+
+test("host stdio requires CodeRight parent identity", () => {
+  const trusted = { readParentExecutable: () => "/Applications/CodeRight.app/Contents/MacOS/CodeRight" };
+  const shell = { readParentExecutable: () => "/bin/zsh" };
+  assert.equal(isTrustedHostTransport(["--host-stdio"], trusted), true);
+  assert.equal(isTrustedHostTransport(["--host-stdio"], shell), false);
+  assert.equal(isTrustedHostTransport([], trusted), false);
+});
+
+test("default authority ledger never falls back to an agent-writable repository path", () => {
+  const root = mkdtempSync(join(tmpdir(), "sentinel-host-store-"));
+  const project = join(root, "project");
+  const host = join(root, "host");
+  mkdirSync(join(project, ".tether"), { recursive: true });
+  writeFileSync(join(project, ".tether", "events.jsonl"), "{}\n");
+  const previous = process.env.SENTINEL_HOST_DATA;
+  process.env.SENTINEL_HOST_DATA = host;
+  try {
+    assert.equal(resolveDefaultStoreRoot(project), join(host, "stores", projectStoreKey(project)));
+  } finally {
+    if (previous === undefined) delete process.env.SENTINEL_HOST_DATA;
+    else process.env.SENTINEL_HOST_DATA = previous;
+    rmSync(root, { recursive: true, force: true });
   }
 });

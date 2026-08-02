@@ -5,7 +5,12 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { buildReceipt } from '../hooks/claude-code/tool-receipt.js';
+import { buildReceipt, defaultClient } from '../hooks/claude-code/tool-receipt.js';
+
+test('Claude tool receipt derives ccx identity from gateway URL', () => {
+  assert.equal(defaultClient({ ANTHROPIC_BASE_URL: 'http://localhost:8801' }), 'ccx');
+  assert.equal(defaultClient({}), 'claude_code');
+});
 
 test('Claude tool receipt is hook-issued, typed, and content-free', () => {
   const receipt = buildReceipt({

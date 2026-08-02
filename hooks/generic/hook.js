@@ -5,7 +5,7 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
-const { resolveHostDataDir, ensureHostToken, resolveDefaultStoreRoot, envFirst } = require('../../lib/host');
+const { resolveHostDataDir, resolveDefaultStoreRoot, envFirst } = require('../../lib/host');
 const { buildRetryFingerprint } = require('../../lib/budget');
 
 function main() {
@@ -119,17 +119,14 @@ function isCompletionIntent(event) {
 
 function invoke(cli, command, input, projectRoot = process.cwd()) {
   const hostDataDir = envFirst('SENTINEL_HOST_DATA', 'TETHER_HOST_DATA', 'BEACON_HOST_DATA') ?? resolveHostDataDir();
-  const token = ensureHostToken(hostDataDir);
   const storeRoot = envFirst('SENTINEL_STORE_ROOT', 'TETHER_STORE_ROOT', 'BEACON_STORE_ROOT') ?? resolveDefaultStoreRoot(projectRoot);
-  const child = spawnSync(process.execPath, [cli, command, '--hook', '--json'], {
+  const child = spawnSync(process.execPath, [cli, command, '--json'], {
     input: JSON.stringify(input),
     encoding: 'utf8',
     windowsHide: true,
     cwd: projectRoot,
     env: {
       ...process.env,
-      SENTINEL_HOST_TOKEN: token,
-      TETHER_HOST_TOKEN: token,
       SENTINEL_HOST_DATA: hostDataDir,
       TETHER_HOST_DATA: hostDataDir,
       SENTINEL_STORE_ROOT: storeRoot,

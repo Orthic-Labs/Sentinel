@@ -8,6 +8,7 @@ import { BeaconCore, ReflectCore, parseLocator } from '../lib/core.js';
 import { createStore } from '../lib/store.js';
 import { resolveDocs } from '../lib/docs.js';
 import { ensureHostToken, doctor } from '../lib/host.js';
+import { checkMatchesSpec } from '../lib/verify.js';
 import { buildRetryFingerprint } from '../lib/budget.js';
 
 const hostDataDir = mkdtempSync(join(tmpdir(), 'beacon-host-'));
@@ -203,7 +204,7 @@ const spoofedHookCli = spawnSync(process.execPath, [join(fileURLToPath(new URL('
   windowsHide: true,
 });
 assert.notEqual(spoofedHookCli.status, 0);
-assert.match(spoofedHookCli.stderr, /trusted host caller/);
+assert.match(spoofedHookCli.stderr, /cannot mint trusted authority/);
 core.resolveSession({ session_id: 'codex-session-1', run_id: assessed.run_id });
 core.resolveSession({ session_id: 'claude-session-4', run_id: assessed.run_id });
 const codexHook = spawnSync(process.execPath, [join(fileURLToPath(new URL('..', import.meta.url)), 'hooks', 'codex', 'hook.js')], {
@@ -263,13 +264,17 @@ const mismatched = core.checkpoint({
 assert.equal(store.list('evidence').find((row) => row.excerpt === 'this text is not in the manifest').attestation_reason, 'excerpt_not_in_source');
 assert.equal(mismatched.decision, 'proceed_with_change');
 // Unattested evidence alone must leave the signoff gate closed.
-core.verify({ run_id: assessed.run_id, checks: [{ kind: 'test', specification: 'v2 smoke', executor: 'host', status: 'passed', output: 'ok' }] }, 'operator');
+core.verify({
+  run_id: assessed.run_id,
+  rubric: { criteria: [{ id: 'v2-smoke', criterion: 'v2 smoke passes', verification: ['v2 smoke'], required_evidence_kinds: ['repo'] }] },
+  checks: [{ kind: 'test', specification: 'v2 smoke', criterion_id: 'v2-smoke', executor: 'host', status: 'passed', output: 'ok' }],
+}, 'operator');
 const blockedClose = core.close({ run_id: assessed.run_id });
 assert.equal(blockedClose.decision, 'blocked');
 assert.ok(blockedClose.gate.deficits.some((deficit) => deficit.code === 'insufficient_repo_evidence'));
 
 // Real evidence: the locator resolves, the excerpt is present, so the core hashes the source itself.
-core.checkpoint({ run_id: assessed.run_id, claim_updates: [{ id: claim.id, status: 'supported' }], evidence: [{ kind: 'docs', trust_class: 'tool', claim_ids: [claim.id], excerpt: 'installed source supports configure' }, { kind: 'repo', trust_class: 'tool', claim_ids: [claim.id], locator: 'package.json', excerpt: 'demo-lib' }] }, 'operator');
+core.checkpoint({ run_id: assessed.run_id, claim_updates: [{ id: claim.id, status: 'supported' }], evidence: [{ kind: 'docs', trust_class: 'tool', claim_ids: [claim.id], excerpt: 'installed source supports configure' }, { kind: 'repo', trust_class: 'tool', claim_ids: [claim.id], criterion_id: 'v2-smoke', locator: 'package.json', excerpt: 'demo-lib' }] }, 'operator');
 const attested = store.list('evidence').find((row) => row.attested === true);
 assert.equal(attested.attestation_reason, 'verified_against_source');
 assert.match(attested.content_hash, /^sha256:[0-9a-f]{64}$/);
@@ -344,8 +349,8 @@ const rejectedOperator = spawnSync(process.execPath, ['cli.js', 'assess', '--ope
   cwd: fileURLToPath(new URL('..', import.meta.url)), input: JSON.stringify({ summary: 'CLI operator spoof' }), encoding: 'utf8',
 });
 assert.equal(rejectedOperator.status, 1);
-assert.match(rejectedOperator.stderr, /trusted host caller/);
-const cli = spawnSync(process.execPath, ['cli.js', 'assess', '--operator', '--json', '--store', join(root, 'cli-store')], {
+assert.match(rejectedOperator.stderr, /cannot mint trusted authority/);
+const cli = spawnSync(process.execPath, ['cli.js', 'assess', '--json', '--store', join(root, 'cli-store')], {
   cwd: fileURLToPath(new URL('..', import.meta.url)), env: hookEnv(), input: JSON.stringify({ summary: 'CLI smoke' }), encoding: 'utf8',
 });
 assert.equal(cli.status, 0, cli.stderr);
@@ -424,6 +429,11 @@ assert.equal(convStop.status, 0, convStop.stderr);
 assert.deepEqual(JSON.parse(convStop.stdout), { action: 'noop', reason: 'conversational_stop' });
 
 // Execution contract CheckSpec matching
+assert.equal(checkMatchesSpec(
+  { specification: 'npm test -- contract --extra' },
+  'npm test -- contract',
+), false, 'a longer command must not satisfy an exact CheckSpec');
+
 const contractRun = core.assess({
   summary: 'Contract-bound criterion',
   task_kind: 'feature',
@@ -449,6 +459,50 @@ const contractVerify = core.verify({
 assert.equal(contractVerify.preflight.stub, true);
 const contractClosed = core.close({ run_id: contractRun.run_id });
 assert.equal(contractClosed.decision, 'closed');
+
+// Signoff must never qualify against an empty rubric.
+const emptyRubricRun = core.assess({
+  summary: 'Empty rubric cannot close',
+  task_kind: 'feature',
+  claims: [{ id: 'empty-rubric-claim', text: 'done', kind: 'local_fact', materiality: 'useful' }],
+});
+core.verify({
+  run_id: emptyRubricRun.run_id,
+  checks: [{ kind: 'test', specification: 'anything', executor: 'host', status: 'passed', output: 'ok' }],
+}, 'operator');
+const emptyRubricClose = core.close({ run_id: emptyRubricRun.run_id }, 'operator');
+assert.equal(emptyRubricClose.decision, 'blocked');
+assert.ok(emptyRubricClose.gate.deficits.some((row) => row.code === 'empty_signoff_rubric'));
+
+// One failed close batch leaves every close row unapplied.
+const atomicStore = createStore(join(root, 'atomic-close-store'));
+const atomicCore = new BeaconCore({ projectRoot: project, store: atomicStore });
+const atomicRun = atomicCore.assess({
+  summary: 'Atomic close',
+  task_kind: 'feature',
+  acceptance_criteria: [{
+    criterion: 'atomic close passes',
+    verification: ['atomic-check'],
+    required_evidence_kinds: ['repo'],
+  }],
+  claims: [{ id: 'atomic-claim', text: 'atomic', kind: 'local_fact', materiality: 'critical' }],
+});
+atomicCore.checkpoint({
+  run_id: atomicRun.run_id,
+  claim_updates: [{ id: 'atomic-claim', status: 'supported' }],
+  evidence: [
+    { kind: 'repo', claim_ids: ['atomic-claim'], criterion_id: 'criterion-0', locator: 'package.json', excerpt: 'demo-lib' },
+    { kind: 'test', trust_class: 'tool', claim_ids: ['atomic-claim'], excerpt: 'ok' },
+  ],
+}, 'operator');
+atomicCore.verify({
+  run_id: atomicRun.run_id,
+  checks: [{ kind: 'test', specification: 'atomic-check', criterion_id: 'criterion-0', executor: 'host', status: 'passed', output: 'ok' }],
+}, 'operator');
+atomicStore.failNextBatchForTest?.();
+assert.throws(() => atomicCore.close({ run_id: atomicRun.run_id }, 'operator'), /injected batch failure/);
+assert.notEqual(atomicStore.get('runs', atomicRun.run_id).status, 'closed');
+assert.equal(atomicStore.list('decisions').filter((row) => row.run_id === atomicRun.run_id && row.decision === 'closed').length, 0);
 
 // Blueprint orientation hook point
 const bpRun = core.assess({ summary: 'Blueprint orientation', claims: [{ id: 'bp-claim', text: 'oriented', kind: 'local_fact', materiality: 'useful' }] });
@@ -487,6 +541,7 @@ const e2e = e2eCore.assess({
   task_kind: 'feature',
   session_id: 'e2e-session',
   task_id: 'e2e-task',
+  acceptance_criteria: [{ id: 'e2e-check', criterion: 'e2e lifecycle passes', verification: ['e2e'], required_evidence_kinds: ['repo'] }],
   claims: [{ id: 'e2e-claim', text: 'package present', kind: 'local_fact', materiality: 'critical' }],
 });
 e2eCore.checkpoint({
@@ -494,12 +549,12 @@ e2eCore.checkpoint({
   claim_updates: [{ id: 'e2e-claim', status: 'supported' }],
   evidence: [
     { kind: 'docs', claim_ids: ['e2e-claim'], locator: 'package.json', excerpt: 'demo-lib' },
-    { kind: 'repo', claim_ids: ['e2e-claim'], locator: 'package.json', excerpt: 'demo-lib' },
+    { kind: 'repo', claim_ids: ['e2e-claim'], criterion_id: 'e2e-check', locator: 'package.json', excerpt: 'demo-lib' },
   ],
 }, 'operator');
 e2eCore.verify({
   run_id: e2e.run_id,
-  checks: [{ kind: 'test', specification: 'e2e', executor: 'host', status: 'passed', output: 'ok' }],
+  checks: [{ kind: 'test', specification: 'e2e', criterion_id: 'e2e-check', executor: 'host', status: 'passed', output: 'ok' }],
 }, 'operator');
 const e2eStop = spawnSync(process.execPath, [join(fileURLToPath(new URL('..', import.meta.url)), 'hooks', 'generic', 'hook.js')], {
   cwd: project,

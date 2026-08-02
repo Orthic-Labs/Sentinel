@@ -8,6 +8,12 @@ const { buildObservableEvent } = require('../observable-event.js');
 const digest = (value) => `sha256:${crypto.createHash('sha256').update(typeof value === 'string' ? value : JSON.stringify(value)).digest('hex')}`;
 const now = () => new Date().toISOString();
 
+function defaultClient(env = process.env) {
+  if (env.MEMBRANE_CLIENT) return env.MEMBRANE_CLIENT;
+  const base = String(env.ANTHROPIC_BASE_URL || '');
+  return /(?:127\.0\.0\.1|localhost):8801(?:\/|$)/.test(base) ? 'ccx' : 'claude_code';
+}
+
 function first(event, keys, fallback = '') {
   for (const key of keys) if (event[key] !== undefined && event[key] !== null) return event[key];
   return fallback;
@@ -53,7 +59,7 @@ function main() {
   const failed = receipt.exit_status !== 0;
   const observable = buildObservableEvent({
     installationId: String(first(event, ['installation_id', 'installationId'], 'host-installation')),
-    clientId: process.env.MEMBRANE_CLIENT || 'claude_code', sessionId: String(first(event, ['session_id', 'sessionId'], 'host-session')),
+    clientId: defaultClient(), sessionId: String(first(event, ['session_id', 'sessionId'], 'host-session')),
     taskId: receipt.task_id, turnId: receipt.turn_id, traceId: String(first(event, ['trace_id', 'traceId'], receipt.tool_call_id)),
     eventType: failed ? 'tool_receipt_failed' : 'tool_receipt', origin: 'tool', content: receipt,
     completeness: { input: true, output: !event.output_omitted, receipt: true },
@@ -64,4 +70,4 @@ function main() {
 }
 
 if (require.main === module) main();
-module.exports = { buildReceipt, digest, main };
+module.exports = { buildReceipt, defaultClient, digest, main };

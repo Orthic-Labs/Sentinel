@@ -11,6 +11,12 @@ const { buildObservableEvent } = require('./observable-event.js');
 const MAX_PACKET_BYTES = 64 * 1024;
 const REQUEST_TIMEOUT_MS = 1500;
 
+function defaultClient(env = process.env) {
+  if (env.MEMBRANE_CLIENT) return env.MEMBRANE_CLIENT;
+  const base = String(env.ANTHROPIC_BASE_URL || '');
+  return /(?:127\.0\.0\.1|localhost):8801(?:\/|$)/.test(base) ? 'ccx' : 'host-adapter';
+}
+
 function findClient(start) {
   if (process.env.MEMBRANE_CONTEXT_CLIENT) return process.env.MEMBRANE_CONTEXT_CLIENT;
   let current = path.resolve(start || process.cwd());
@@ -46,7 +52,7 @@ function buildRequest(event, root) {
     task,
     repo: root,
     session,
-    client: event.client || process.env.MEMBRANE_CLIENT || 'host-adapter',
+    client: event.client || defaultClient(),
     maxTokens: Number.isInteger(event.max_tokens) ? event.max_tokens : 6420,
     anchors: Array.isArray(event.anchors) ? event.anchors.join(',') : String(event.anchors || ''),
     taskEnvelope: {
@@ -109,4 +115,4 @@ function main() {
 }
 
 if (require.main === module) main();
-module.exports = { buildRequest, findClient, render, resolveWorkspaceRoot, runClient, main };
+module.exports = { buildRequest, defaultClient, findClient, render, resolveWorkspaceRoot, runClient, main };

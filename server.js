@@ -5,10 +5,11 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { BeaconCore, ReflectCore } = require('./lib/core');
 const { resolveDocs } = require('./lib/docs');
-const { envFirst } = require('./lib/host');
+const { envFirst, isTrustedHostTransport } = require('./lib/host');
 
 const serverVersion = '2.0.1-local';
 const legacyMode = envFirst('SENTINEL_LEGACY_TOOLS', 'TETHER_LEGACY_TOOLS', 'BEACON_LEGACY_TOOLS') === '1';
+const hostTransportAuthorized = isTrustedHostTransport();
 let beaconCore;
 const telemetryEnabled = envFirst('SENTINEL_TELEMETRY_ENABLED', 'TETHER_TELEMETRY_ENABLED', 'BEACON_TELEMETRY_ENABLED') !== '0';
 const telemetryMaxBytes = parsePositiveInteger(envFirst('SENTINEL_TELEMETRY_MAX_BYTES', 'TETHER_TELEMETRY_MAX_BYTES', 'BEACON_TELEMETRY_MAX_BYTES'), 1_000_000);
@@ -349,7 +350,6 @@ const beaconToolSchema = {
   type: 'object',
   properties: {
     operation: { type: 'string', enum: ['assess', 'checkpoint', 'verify', 'close'] },
-    host_token: { type: 'string', minLength: 1, maxLength: 512 },
     run_id: { type: 'string', minLength: 1, maxLength: 128 },
     summary: { type: 'string', minLength: 1, maxLength: 2_000, description: 'Required when operation is assess.' },
     task_kind: { type: 'string', maxLength: 40 },
@@ -639,7 +639,7 @@ async function callTool(message) {
         projectRoot: process.cwd(),
         storeRoot: envFirst('SENTINEL_STORE_ROOT', 'TETHER_STORE_ROOT', 'BEACON_STORE_ROOT'),
       });
-      const authority = hostTokenMatches(args) ? 'host' : 'model';
+      const authority = hostTransportAuthorized ? 'host' : 'model';
       const value = beaconCore[args.operation]({ ...args }, authority);
       value.operation = args.operation;
       result(message.id, textResult(value));
@@ -1221,7 +1221,7 @@ function validateBeaconArgs(args) {
       throw new RpcError(-32602, 'evidence.trust_class is issuer-derived and not model-writable');
     }
   }
-  const hostAuthorized = hostTokenMatches(args);
+  const hostAuthorized = hostTransportAuthorized;
   for (const item of args.checks ?? []) {
     if (!hostAuthorized && item && typeof item === 'object' && ('executor' in item || 'status' in item)) {
       throw new RpcError(-32602, 'check executor/status are issuer-derived and not model-writable');
@@ -1240,16 +1240,6 @@ function validateBeaconArgs(args) {
     }
   }
   if (args.budget !== undefined && (!args.budget || typeof args.budget !== 'object' || Array.isArray(args.budget))) throw new RpcError(-32602, 'budget must be an object');
-}
-
-function hostTokenMatches(args = {}) {
-  const expected = envFirst('SENTINEL_HOST_TOKEN', 'TETHER_HOST_TOKEN', 'BEACON_HOST_TOKEN');
-  const supplied = typeof args.host_token === 'string' ? args.host_token : '';
-  if (!expected || !supplied) return false;
-  const expectedBytes = Buffer.from(expected);
-  const suppliedBytes = Buffer.from(supplied);
-  return expectedBytes.length === suppliedBytes.length
-    && crypto.timingSafeEqual(expectedBytes, suppliedBytes);
 }
 
 function validateDocsArgs(args) {
