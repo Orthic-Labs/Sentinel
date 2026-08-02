@@ -2,7 +2,7 @@
 
 **Coding agents can sound certain after reading stale code, guessing an API, or skipping a failed test. Sentinel is the local ledger that makes certainty cost evidence: material claims need source-backed proof, and required checks must pass before work is allowed to close.**
 
-<sub>Public name **Sentinel**. The CLI, env vars, and MCP tool keep the compatibility alias <code>tether</code>.</sub>
+<sub>Public name **Sentinel**. The CLI, env vars, and MCP tool keep the compatibility alias <code>sentinel</code>.</sub>
 
 ![license](https://img.shields.io/badge/license-source--available-5362d8?style=flat-square&labelColor=111318)
 ![node](https://img.shields.io/badge/node-%E2%89%A520-5362d8?style=flat-square&labelColor=111318)
@@ -67,8 +67,8 @@ flowchart LR
     H1 --> G[generic adapter<br/>neutral decision contract]
     H2 --> G
     G --> CLI[cli.js]
-    MCP[Any MCP host] --> SRV[server.js<br/>tether · docs tools]
-    CLI --> CORE[BeaconCore<br/>assess · checkpoint · verify · close]
+    MCP[Any MCP host] --> SRV[server.js<br/>sentinel · docs tools]
+    CLI --> CORE[SentinelCore<br/>assess · checkpoint · verify · close]
     SRV --> CORE
     CORE --> CL[claims + evidence]
     CORE --> GT[gate evaluation]
@@ -87,7 +87,7 @@ Two details do a lot of work here:
 Local, durable, tamper-evident. Nothing leaves the machine.
 
 ```
-~/Library/Application Support/tether/stores/<project-hash>/
+~/Library/Application Support/sentinel/stores/<project-hash>/
 ├── events.jsonl                      # append-only; earlier events survive interrupts
 └── objects/sha256/<prefix>/<digest>  # deduplicated, content-addressed payloads
 ```
@@ -97,7 +97,7 @@ Owner-only directories, `0600` files, atomic temp-file-then-rename writes. `<pro
 ## Quick start
 
 ```sh
-npx @orthic-labs/tether
+npx @orthic-labs/sentinel
 
 node cli.js assess --operator --json <<'JSON'
 {"summary":"Fix parser","task_kind":"bugfix","claims":[{"text":"Parser rejects escaped quotes","kind":"behavioral_fact","materiality":"critical"}]}
@@ -107,7 +107,7 @@ JSON
 MCP surface:
 
 ```
-tether(operation: assess | checkpoint | verify | close)
+sentinel(operation: assess | checkpoint | verify | close)
 docs(library, topic, version?, project_root?)
 ```
 
@@ -117,8 +117,8 @@ The bundled `docs` tool is version-aware: it resolves the dependency version fro
 
 ## What's new in 2.x
 
-- Hooks-first enforcement with durable local state; v1 MCP surface replaced by `tether` + `docs`.
-- Host token file replaces `TETHER_TRUSTED_CALLER`; store moved out of the project tree (legacy `.tether/` still read).
+- Hooks-first enforcement with durable local state; v1 MCP surface replaced by `sentinel` + `docs`.
+- Host token file replaces `SENTINEL_TRUSTED_CALLER`; store moved out of the project tree (legacy `.sentinel/` still read).
 - Gate evaluation is rubric-driven: checks must link a criterion and match a CheckSpec; supported claims require a matching evidence class.
 - MCP schema strips model-writable `trust_class` / `executor` / `status` — those fields are issuer-derived now.
 - Stop-event handling distinguishes a conversational pause from completion intent; completion runs verify, then a transactional close.
@@ -128,13 +128,13 @@ The bundled `docs` tool is version-aware: it resolves the dependency version fro
 - It proves the supplied acceptance policy — not the absence of every possible bug.
 - External facts still depend on an available authoritative source.
 - Model-independent enforcement requires the host's hook adapter to be installed.
-- Deprecated v1 tools return migration errors unless `TETHER_LEGACY_TOOLS=1` is set temporarily.
+- Deprecated v1 tools return migration errors unless `SENTINEL_LEGACY_TOOLS=1` is set temporarily.
 
 ## Go deeper
 
 | Doc | What's in it |
 |---|---|
-| [TETHER-MASTER.md](TETHER-MASTER.md) | Full adjudicated guide — 49 indexed claims |
+| [SENTINEL-MASTER.md](SENTINEL-MASTER.md) | Full adjudicated guide — 49 indexed claims |
 | [docs/architecture.md](docs/architecture.md) | Components, data flow, flow-inventory status |
 | [docs/integration-matrix.md](docs/integration-matrix.md) | CLI / MCP / hooks / CI surfaces |
 | [docs/store-migration.md](docs/store-migration.md) | Store layout, host token, rename aliases |

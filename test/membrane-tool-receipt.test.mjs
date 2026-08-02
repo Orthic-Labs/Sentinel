@@ -46,7 +46,7 @@ test('Claude tool-receipt hook main path emits failure event without runtime err
   const result = spawnSync(process.execPath, [fileURLToPath(new URL('../hooks/claude-code/tool-receipt.js', import.meta.url))], {
     input: JSON.stringify({ hook_event_name: 'PostToolUseFailure', task_id: 'task-1', turn_id: 'turn-1', tool_call_id: 'call-1', tool_name: 'Bash', error: 'failed', cwd: dir }),
     encoding: 'utf8',
-    env: { ...process.env, MEMRIGHT_TELEMETRY_INGRESS: ingress },
+    env: { ...process.env, CRYPT_TELEMETRY_INGRESS: ingress },
   });
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /tool_receipt_failed/);

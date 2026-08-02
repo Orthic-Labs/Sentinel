@@ -4,28 +4,23 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { BeaconCore, ReflectCore, parseLocator } from '../lib/core.js';
+import { SentinelCore, parseLocator } from '../lib/core.js';
 import { createStore } from '../lib/store.js';
 import { resolveDocs } from '../lib/docs.js';
-import { ensureHostToken, doctor } from '../lib/host.js';
+import { doctor, projectStoreKey } from '../lib/host.js';
 import { checkMatchesSpec } from '../lib/verify.js';
 import { buildRetryFingerprint } from '../lib/budget.js';
 
-const hostDataDir = mkdtempSync(join(tmpdir(), 'beacon-host-'));
-ensureHostToken(hostDataDir);
-const hostToken = readFileSync(join(hostDataDir, 'host.token'), 'utf8').trim();
+const hostDataDir = mkdtempSync(join(tmpdir(), 'sentinel-host-'));
 function hookEnv(extra = {}) {
   return {
     ...process.env,
-    TETHER_HOST_DATA: hostDataDir,
-    BEACON_HOST_DATA: hostDataDir,
-    TETHER_HOST_TOKEN: hostToken,
-    BEACON_HOST_TOKEN: hostToken,
+    SENTINEL_HOST_DATA: hostDataDir,
     ...extra,
   };
 }
 
-const root = mkdtempSync(join(tmpdir(), 'beacon-v2-'));
+const root = mkdtempSync(join(tmpdir(), 'sentinel-v2-'));
 const project = join(root, 'project');
 mkdirSync(join(project, 'node_modules', 'demo-lib'), { recursive: true });
 writeFileSync(join(project, 'package.json'), JSON.stringify({ dependencies: { 'demo-lib': '1.2.3' }}));
@@ -33,9 +28,8 @@ writeFileSync(join(project, 'package-lock.json'), JSON.stringify({ packages: { '
 writeFileSync(join(project, 'node_modules', 'demo-lib', 'package.json'), JSON.stringify({ name: 'demo-lib', version: '1.2.3' }));
 writeFileSync(join(project, 'node_modules', 'demo-lib', 'README.md'), '# Client\nUse configure client middleware.\n');
 
-const store = createStore(join(project, '.tether'));
-const core = new BeaconCore({ projectRoot: project, store });
-assert.equal(ReflectCore, BeaconCore);
+const store = createStore(join(hostDataDir, 'stores', projectStoreKey(project)));
+const core = new SentinelCore({ projectRoot: project, store });
 assert.throws(
   () => core.assess({ run_id: 'invalid-claim-run', summary: 'Reject malformed claim', claims: ['not-an-object'] }),
   /claim must be an object/,
@@ -51,22 +45,19 @@ const mcpSchema = spawnSync(process.execPath, [join(fileURLToPath(new URL('..', 
 });
 assert.equal(mcpSchema.status, 0, mcpSchema.stderr);
 const mcpResponses = mcpSchema.stdout.trim().split('\n').map((line) => JSON.parse(line));
-const tetherSchema = mcpResponses.find((response) => response.id === 2).result.tools.find((tool) => tool.name === 'tether').inputSchema;
 const sentinelSchema = mcpResponses.find((response) => response.id === 2).result.tools.find((tool) => tool.name === 'sentinel').inputSchema;
-assert.equal(tetherSchema.properties.claims.items.type, 'object');
-assert.equal(tetherSchema.properties.evidence.items.type, 'object');
-assert.equal(tetherSchema.properties.checks.items.type, 'object');
-assert.equal(tetherSchema.properties.evidence.items.properties.trust_class, undefined);
-assert.equal(tetherSchema.properties.checks.items.properties.executor, undefined);
-assert.equal(tetherSchema.properties.checks.items.properties.status, undefined);
+assert.equal(sentinelSchema.properties.claims.items.type, 'object');
+assert.equal(sentinelSchema.properties.evidence.items.type, 'object');
+assert.equal(sentinelSchema.properties.checks.items.type, 'object');
 assert.equal(sentinelSchema.properties.evidence.items.properties.trust_class, undefined);
-assert.deepEqual(tetherSchema.allOf[0].then.required, ['summary']);
-assert.deepEqual(tetherSchema.allOf[0].else.required, ['run_id']);
+assert.equal(sentinelSchema.properties.checks.items.properties.executor, undefined);
+assert.equal(sentinelSchema.properties.checks.items.properties.status, undefined);
+assert.deepEqual(sentinelSchema.allOf[0].then.required, ['summary']);
+assert.deepEqual(sentinelSchema.allOf[0].else.required, ['run_id']);
 
-const unassessedRiskStore = join(root, 'unassessed-risk-store');
 const unassessedRiskHook = spawnSync(process.execPath, [join(fileURLToPath(new URL('..', import.meta.url)), 'hooks', 'generic', 'hook.js')], {
   cwd: project,
-  env: hookEnv({ TETHER_ROOT: fileURLToPath(new URL('..', import.meta.url)), TETHER_STORE_ROOT: unassessedRiskStore }),
+  env: hookEnv({ SENTINEL_ROOT: fileURLToPath(new URL('..', import.meta.url)) }),
   input: JSON.stringify({ hook_event_name: 'PreToolUse', session_id: 'unassessed-session', tool_input: { command: 'git push --force origin main' } }),
   encoding: 'utf8',
   windowsHide: true,
@@ -74,11 +65,11 @@ const unassessedRiskHook = spawnSync(process.execPath, [join(fileURLToPath(new U
 assert.equal(unassessedRiskHook.status, 1, unassessedRiskHook.stderr);
 assert.deepEqual(JSON.parse(unassessedRiskHook.stdout), {
   action: 'block',
-  reason: 'high-risk command requires Beacon assess before execution',
+  reason: 'high-risk command requires Sentinel assess before execution',
 });
 const unassessedSuccessHook = spawnSync(process.execPath, [join(fileURLToPath(new URL('..', import.meta.url)), 'hooks', 'generic', 'hook.js')], {
   cwd: project,
-  env: hookEnv({ TETHER_ROOT: fileURLToPath(new URL('..', import.meta.url)), TETHER_STORE_ROOT: unassessedRiskStore }),
+  env: hookEnv({ SENTINEL_ROOT: fileURLToPath(new URL('..', import.meta.url)) }),
   input: JSON.stringify({ hook_event_name: 'PostToolUse', tool_name: 'shell', tool_input: { command: 'node --version' } }),
   encoding: 'utf8',
   windowsHide: true,
@@ -86,17 +77,12 @@ const unassessedSuccessHook = spawnSync(process.execPath, [join(fileURLToPath(ne
 assert.equal(unassessedSuccessHook.status, 0, unassessedSuccessHook.stderr);
 assert.deepEqual(JSON.parse(unassessedSuccessHook.stdout), {
   action: 'enforcement_degraded',
-  reason: 'no active beacon run',
+  reason: 'no active sentinel run',
 });
 
-const ambiguousStoreRoot = join(root, 'ambiguous-store');
-const ambiguousStore = createStore(ambiguousStoreRoot);
-const ambiguousCore = new BeaconCore({ projectRoot: project, store: ambiguousStore });
-ambiguousCore.assess({ summary: 'First unrelated task' });
-ambiguousCore.assess({ summary: 'Second unrelated task' });
 const recursiveAmbiguousStop = spawnSync(process.execPath, [join(fileURLToPath(new URL('..', import.meta.url)), 'hooks', 'generic', 'hook.js')], {
   cwd: project,
-  env: hookEnv({ TETHER_ROOT: fileURLToPath(new URL('..', import.meta.url)), TETHER_STORE_ROOT: ambiguousStoreRoot }),
+  env: hookEnv({ SENTINEL_ROOT: fileURLToPath(new URL('..', import.meta.url)) }),
   input: JSON.stringify({ hook_event_name: 'Stop', session_id: 'recursive-session', stop_hook_active: true }),
   encoding: 'utf8',
   windowsHide: true,
@@ -108,7 +94,7 @@ assert.deepEqual(JSON.parse(recursiveAmbiguousStop.stdout), {
 });
 const idleAmbiguousStop = spawnSync(process.execPath, [join(fileURLToPath(new URL('..', import.meta.url)), 'hooks', 'generic', 'hook.js')], {
   cwd: project,
-  env: hookEnv({ TETHER_ROOT: fileURLToPath(new URL('..', import.meta.url)), TETHER_STORE_ROOT: ambiguousStoreRoot }),
+  env: hookEnv({ SENTINEL_ROOT: fileURLToPath(new URL('..', import.meta.url)) }),
   input: JSON.stringify({ hook_event_name: 'Stop', session_id: 'idle-session' }),
   encoding: 'utf8',
   windowsHide: true,
@@ -116,11 +102,11 @@ const idleAmbiguousStop = spawnSync(process.execPath, [join(fileURLToPath(new UR
 assert.equal(idleAmbiguousStop.status, 0, idleAmbiguousStop.stderr);
 assert.deepEqual(JSON.parse(idleAmbiguousStop.stdout), {
   action: 'enforcement_degraded',
-  reason: 'no active beacon run',
+  reason: 'no active sentinel run',
 });
 const riskyAmbiguousUse = spawnSync(process.execPath, [join(fileURLToPath(new URL('..', import.meta.url)), 'hooks', 'generic', 'hook.js')], {
   cwd: project,
-  env: hookEnv({ TETHER_ROOT: fileURLToPath(new URL('..', import.meta.url)), TETHER_STORE_ROOT: ambiguousStoreRoot }),
+  env: hookEnv({ SENTINEL_ROOT: fileURLToPath(new URL('..', import.meta.url)) }),
   input: JSON.stringify({ hook_event_name: 'PreToolUse', session_id: 'risky-session', tool_input: { command: 'git push --force origin main' } }),
   encoding: 'utf8',
   windowsHide: true,
@@ -136,7 +122,7 @@ assert.deepEqual(sessionBinding, { run_id: assessed.run_id, status: 'bound' });
 assert.equal(store.get('session_bindings', 'claude-session-1').run_id, assessed.run_id);
 const enforcedHook = spawnSync(process.execPath, [join(fileURLToPath(new URL('..', import.meta.url)), 'hooks', 'generic', 'hook.js')], {
   cwd: project,
-  env: hookEnv({ TETHER_ROOT: fileURLToPath(new URL('..', import.meta.url)), TETHER_STORE_ROOT: join(project, '.tether') }),
+  env: hookEnv({ SENTINEL_ROOT: fileURLToPath(new URL('..', import.meta.url)) }),
   input: JSON.stringify({ hook_event_name: 'PreToolUse', session_id: 'claude-session-1', tool_input: { command: 'rm -rf build-output' } }),
   encoding: 'utf8',
   windowsHide: true,
@@ -147,7 +133,7 @@ assert.equal(enforcedHookResult.action, 'block');
 assert.equal(enforcedHookResult.reason, 'high-risk gate unmet');
 const inProcessGenericHook = spawnSync(process.execPath, ['-e', `const { evaluate } = require(${JSON.stringify(join(fileURLToPath(new URL('..', import.meta.url)), 'hooks', 'generic', 'hook.js'))}); process.stdout.write(JSON.stringify(evaluate(${JSON.stringify({ hook_event_name: 'PreToolUse', run_id: assessed.run_id, tool_input: { command: 'rm -rf build-output' } })})));`], {
   cwd: project,
-  env: hookEnv({ TETHER_ROOT: fileURLToPath(new URL('..', import.meta.url)), TETHER_STORE_ROOT: join(project, '.tether') }),
+  env: hookEnv({ SENTINEL_ROOT: fileURLToPath(new URL('..', import.meta.url)) }),
   encoding: 'utf8',
   windowsHide: true,
 });
@@ -171,7 +157,7 @@ assert.deepEqual(
 );
 const failureHook = spawnSync(process.execPath, [join(fileURLToPath(new URL('..', import.meta.url)), 'hooks', 'generic', 'hook.js')], {
   cwd: project,
-  env: hookEnv({ TETHER_ROOT: fileURLToPath(new URL('..', import.meta.url)), TETHER_STORE_ROOT: join(project, '.tether') }),
+  env: hookEnv({ SENTINEL_ROOT: fileURLToPath(new URL('..', import.meta.url)) }),
   input: JSON.stringify({ hook_event_name: 'PostToolUse', run_id: assessed.run_id, tool_name: 'shell', error: 'command failed' }),
   encoding: 'utf8',
   windowsHide: true,
@@ -180,7 +166,7 @@ assert.equal(failureHook.status, 0, failureHook.stderr);
 assert.equal(JSON.parse(failureHook.stdout).action, 'continue');
 const successfulHook = spawnSync(process.execPath, [join(fileURLToPath(new URL('..', import.meta.url)), 'hooks', 'generic', 'hook.js')], {
   cwd: project,
-  env: hookEnv({ TETHER_ROOT: fileURLToPath(new URL('..', import.meta.url)), TETHER_STORE_ROOT: join(project, '.tether') }),
+  env: hookEnv({ SENTINEL_ROOT: fileURLToPath(new URL('..', import.meta.url)) }),
   input: JSON.stringify({
     hook_event_name: 'PostToolUse',
     run_id: assessed.run_id,
@@ -209,7 +195,7 @@ core.resolveSession({ session_id: 'codex-session-1', run_id: assessed.run_id });
 core.resolveSession({ session_id: 'claude-session-4', run_id: assessed.run_id });
 const codexHook = spawnSync(process.execPath, [join(fileURLToPath(new URL('..', import.meta.url)), 'hooks', 'codex', 'hook.js')], {
   cwd: project,
-  env: hookEnv({ CODEX_SESSION_ID: 'codex-session-1', TETHER_STORE_ROOT: join(project, '.tether') }),
+  env: hookEnv({ CODEX_SESSION_ID: 'codex-session-1' }),
   input: JSON.stringify({ hook_event_name: 'PreToolUse', tool_input: { command: 'rm -rf build-output' } }),
   encoding: 'utf8',
   windowsHide: true,
@@ -222,7 +208,7 @@ assert.deepEqual(JSON.parse(codexHook.stdout), {
 });
 const claudeHook = spawnSync(process.execPath, [join(fileURLToPath(new URL('..', import.meta.url)), 'hooks', 'claude-code', 'hook.js')], {
   cwd: project,
-  env: hookEnv({ CLAUDE_SESSION_ID: 'claude-session-4', TETHER_STORE_ROOT: join(project, '.tether') }),
+  env: hookEnv({ CLAUDE_SESSION_ID: 'claude-session-4' }),
   input: JSON.stringify({ hook_event_name: 'PreToolUse', tool_input: { command: 'rm -rf build-output' } }),
   encoding: 'utf8',
   windowsHide: true,
@@ -283,7 +269,7 @@ assert.equal(attested.invalidation_key, attested.content_hash);
 const closed = core.close({ run_id: assessed.run_id });
 assert.equal(closed.decision, 'closed');
 assert.equal(core.close({ run_id: assessed.run_id }).idempotent, true);
-assert.ok(existsSync(join(project, '.tether', 'events.jsonl')));
+assert.ok(existsSync(join(store.root, 'events.jsonl')));
 assert.throws(() => core.checkpoint({ run_id: assessed.run_id, evidence: [{ kind: 'docs', trust_class: 'tool', excerpt: 'late mutation' }] }), /closed run/);
 
 const spoofed = core.assess({ summary: 'Reject spoofed check', task_kind: 'feature', claims: [{ id: 'spoofed-claim', text: 'package is present', kind: 'local_fact', materiality: 'critical' }] });
@@ -337,7 +323,7 @@ assert.notEqual(secondDocsPage.items[0].locator, firstDocsPage.items[0].locator)
 
 const riskyHook = spawnSync(process.execPath, [join(fileURLToPath(new URL('..', import.meta.url)), 'hooks', 'generic', 'hook.js')], {
   cwd: project,
-  env: hookEnv({ TETHER_ROOT: fileURLToPath(new URL('..', import.meta.url)), TETHER_STORE_ROOT: join(project, '.tether') }),
+  env: hookEnv({ SENTINEL_ROOT: fileURLToPath(new URL('..', import.meta.url)) }),
   input: JSON.stringify({ hook_event_name: 'PreToolUse', run_id: waiverRun.run_id, tool_input: { command: 'git push -f origin main' } }),
   encoding: 'utf8',
   windowsHide: true,
@@ -420,7 +406,7 @@ assert.match(fpA, /^sha256:/);
 // Conversational Stop ≠ completion
 const convStop = spawnSync(process.execPath, [join(fileURLToPath(new URL('..', import.meta.url)), 'hooks', 'generic', 'hook.js')], {
   cwd: project,
-  env: hookEnv({ TETHER_ROOT: fileURLToPath(new URL('..', import.meta.url)), TETHER_STORE_ROOT: join(project, '.tether') }),
+  env: hookEnv({ SENTINEL_ROOT: fileURLToPath(new URL('..', import.meta.url)) }),
   input: JSON.stringify({ hook_event_name: 'Stop', session_id: 'claude-session-1' }),
   encoding: 'utf8',
   windowsHide: true,
@@ -433,6 +419,14 @@ assert.equal(checkMatchesSpec(
   { specification: 'npm test -- contract --extra' },
   'npm test -- contract',
 ), false, 'a longer command must not satisfy an exact CheckSpec');
+assert.equal(checkMatchesSpec(
+  { kind: 'test', specification: 'npm test -- contract' },
+  { kind: 'command', specification: 'npm test -- contract' },
+), false, 'a check kind must exactly match typed CheckSpec kind');
+assert.throws(
+  () => checkMatchesSpec({ kind: 'test', specification: 'npm test' }, { kind: 'test' }),
+  /exactly one/,
+);
 
 const contractRun = core.assess({
   summary: 'Contract-bound criterion',
@@ -476,7 +470,7 @@ assert.ok(emptyRubricClose.gate.deficits.some((row) => row.code === 'empty_signo
 
 // One failed close batch leaves every close row unapplied.
 const atomicStore = createStore(join(root, 'atomic-close-store'));
-const atomicCore = new BeaconCore({ projectRoot: project, store: atomicStore });
+const atomicCore = new SentinelCore({ projectRoot: project, store: atomicStore });
 const atomicRun = atomicCore.assess({
   summary: 'Atomic close',
   task_kind: 'feature',
@@ -520,22 +514,14 @@ incrStore.append('retry_budget', { id: 'rb-1', run_id: 'incr-1', fingerprint: 'x
 assert.equal(incrStore.get('runs', 'incr-1').summary, 'a');
 assert.equal(incrStore.list('retry_budget').length, 1);
 
-// doctor + init
+// doctor does not initialize a host token.
 const doctorResult = doctor(project);
 assert.equal(doctorResult.product, 'sentinel');
 assert.equal(doctorResult.ok, true);
-const initCli = spawnSync(process.execPath, ['cli.js', 'init', '--json'], {
-  cwd: fileURLToPath(new URL('..', import.meta.url)),
-  env: hookEnv(),
-  encoding: 'utf8',
-});
-assert.equal(initCli.status, 0, initCli.stderr);
-assert.equal(JSON.parse(initCli.stdout).host_token_initialized, true);
 
 // E2E lifecycle: assess → evidence → verify → completion-intent Stop closes
-const e2eStoreRoot = join(root, 'e2e-store');
-const e2eStore = createStore(e2eStoreRoot);
-const e2eCore = new BeaconCore({ projectRoot: project, store: e2eStore });
+const e2eStore = store;
+const e2eCore = new SentinelCore({ projectRoot: project, store: e2eStore });
 const e2e = e2eCore.assess({
   summary: 'E2E lifecycle',
   task_kind: 'feature',
@@ -558,7 +544,7 @@ e2eCore.verify({
 }, 'operator');
 const e2eStop = spawnSync(process.execPath, [join(fileURLToPath(new URL('..', import.meta.url)), 'hooks', 'generic', 'hook.js')], {
   cwd: project,
-  env: hookEnv({ TETHER_ROOT: fileURLToPath(new URL('..', import.meta.url)), TETHER_STORE_ROOT: e2eStoreRoot }),
+  env: hookEnv({ SENTINEL_ROOT: fileURLToPath(new URL('..', import.meta.url)) }),
   input: JSON.stringify({ hook_event_name: 'Stop', session_id: 'e2e-session', completion_intent: true }),
   encoding: 'utf8',
   windowsHide: true,

@@ -3,20 +3,29 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { createRequire } from 'node:module';
 import { appendObservableEvent } from '../hooks/observable-ingress.js';
+
+const require = createRequire(import.meta.url);
+const { buildObservableEvent } = require('../hooks/observable-event.js');
 
 test('observable ingress fsyncs one Membrane-owned content-free record', () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'sentinel-ingress-'));
   const target = path.join(directory, 'events.jsonl');
-  const previous = process.env.MEMRIGHT_TELEMETRY_INGRESS;
-  process.env.MEMRIGHT_TELEMETRY_INGRESS = target;
+  const previous = process.env.CRYPT_TELEMETRY_INGRESS;
+  process.env.CRYPT_TELEMETRY_INGRESS = target;
   try {
-    assert.deepEqual(appendObservableEvent({ schema: 'orthic.observable-event.v1', event_id: 'e1' }), { status: 'persisted', target: 'membrane_prompt_ingress' });
+    const event = buildObservableEvent({
+      installationId: 'install-1', clientId: 'codex', sessionId: 'session-1', taskId: 'task-1', turnId: 'turn-1', traceId: 'trace-1',
+      eventType: 'tool_receipt', origin: 'tool', content: 'private command output', completeness: { receipt: true },
+    });
+    assert.deepEqual(appendObservableEvent(event), { status: 'persisted', target: 'membrane_prompt_ingress' });
     const record = JSON.parse(fs.readFileSync(target, 'utf8'));
-    assert.deepEqual(record.observable_events[0], { schema: 'orthic.observable-event.v1', event_id: 'e1' });
+    assert.deepEqual(record.observable_events[0], event);
+    assert.throws(() => appendObservableEvent({ ...event, content: 'private command output' }), /forbidden field/);
   } finally {
-    if (previous === undefined) delete process.env.MEMRIGHT_TELEMETRY_INGRESS;
-    else process.env.MEMRIGHT_TELEMETRY_INGRESS = previous;
+    if (previous === undefined) delete process.env.CRYPT_TELEMETRY_INGRESS;
+    else process.env.CRYPT_TELEMETRY_INGRESS = previous;
     fs.rmSync(directory, { recursive: true, force: true });
   }
 });

@@ -1,22 +1,20 @@
 {
   "name": "@orthic-labs/sentinel",
   "version": "2.0.1",
-  "description": "Sentinel evidence gate with Tether compatibility alias: claim/evidence/check ledgers, exact-version docs, and model-independent enforcement hooks.",
+  "description": "Sentinel evidence gate: claim/evidence/check ledgers, exact-version docs, and model-independent enforcement hooks.",
   "license": "SEE LICENSE IN LICENSE",
   "homepage": "https://github.com/Orthic-Labs/Sentinel#readme",
   "repository": { "type": "git", "url": "git+https://github.com/Orthic-Labs/Sentinel.git" },
   "bugs": { "url": "https://github.com/Orthic-Labs/Sentinel/issues" },
-  "keywords": ["mcp", "agent", "sentinel", "tether", "verification", "evidence", "hooks", "claude-code", "codex"],
+  "keywords": ["mcp", "agent", "sentinel", "verification", "evidence", "hooks", "claude-code", "codex"],
   "type": "commonjs",
   "engines": { "node": ">=20" },
   "bin": {
     "sentinel": "server.js",
-    "sentinel-cli": "cli.js",
-    "tether": "server.js",
-    "tether-cli": "cli.js"
+    "sentinel-cli": "cli.js"
   },
   "scripts": {
-    "test": "node test.mjs && node test/v2.mjs",
+    "test": "node --test test/*.test.mjs && node test.mjs && node test/v2.mjs",
     "mcp": "node server.js"
   }
 }

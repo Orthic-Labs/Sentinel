@@ -10,11 +10,11 @@ function main() {
   let event = {};
   try { event = JSON.parse(raw); } catch { /* Generic hook safely handles malformed host events. */ }
   const root = path.resolve(__dirname, '..');
-  let result = { action: 'noop', reason: 'beacon hook unavailable' };
-  try { result = evaluate(event, { root }); } catch { /* Fail open when Beacon cannot evaluate its own result. */ }
+  let result = { action: 'noop', reason: 'sentinel hook unavailable' };
+  try { result = evaluate(event, { root }); } catch { /* Fail open when Sentinel cannot evaluate its own result. */ }
   if (result.action !== 'block') return;
   const eventName = event.hook_event_name ?? event.event ?? event.type ?? '';
-  const reason = String(result.reason ?? 'beacon gate unmet').slice(0, 500);
+  const reason = String(result.reason ?? 'sentinel gate unmet').slice(0, 500);
   if (eventName === 'PreToolUse' || eventName === 'pre_tool_use') {
     process.stdout.write(`${JSON.stringify({
       hookSpecificOutput: {

@@ -1,7 +1,7 @@
-# Tether v2 — Master Synthesis, Adjudication, and Implementation Guide
+# Sentinel v2 — Master Synthesis, Adjudication, and Implementation Guide
 
-> **Tether** — keep the agent tied to what is actually true.
-> Repository: <https://github.com/Orthic-Labs/Sentinel> · npm: `@orthic-labs/tether` (compatibility package id)
+> **Sentinel** — keep the agent tied to what is actually true.
+> Repository: <https://github.com/Orthic-Labs/Sentinel> · npm: `@orthic-labs/sentinel` (compatibility package id)
 >
 > **On the name (settled 2026-07-26).** The design was synthesized under the name **REFLECT** —
 > *Recursive Evidence Framework for Learning, Execution, Context and Thought*, proposed by the
@@ -12,14 +12,14 @@
 > deterministic checks with a non-model executor (D2); **C**ontext = governed and compact, payloads by
 > reference (§4.8); **T**hought = native, private, never persisted as truth (A2/A3).
 >
-> The product was nonetheless renamed to **Tether**, for a reason this document itself supplies:
+> The product was nonetheless renamed to **Sentinel**, for a reason this document itself supplies:
 > `reflect` names the mechanism the research *refutes*. Huang et al. (ICLR 2024, verified §1.5) show
 > that self-reflection without external grounding can degrade reasoning, and the Sol source doc warned
 > that the name `reflect` is only safe "if the tool description makes its role explicit" so a model does
 > not read it as *write a longer monologue*. A name that needs a disclaimer to prevent misuse is a name
 > fighting its product — and weak models, the actual market (§4.10), are exactly the ones that will
-> pattern-match it wrong. `Tether` names the mechanism that works: anchoring a claim to evidence and
-> constraining drift. The metaphor extends into the architecture — an **invalidation key is the tether
+> pattern-match it wrong. `Sentinel` names the mechanism that works: anchoring a claim to evidence and
+> constraining drift. The metaphor extends into the architecture — an **invalidation key is the sentinel
 > breaking when the anchor moves**. The acronym's own `T = Thought` mapped to the one thing the design
 > deliberately refuses to persist, which was the tell that it was a backronym rather than a description.
 > The adjudication tables below still write `reflect` where they quote the source research verbatim.
@@ -243,7 +243,7 @@ Positioning for GitHub (the README pitch, Rev 2): *"Your expensive model doesn't
 |---|---|---|---|---|
 | E1 | Resolve the exact version from lockfiles/manifests **before** any docs query | Grok, Sol, Qwen | **IMPLEMENT** | Unanimous and the highest-value docs feature. Ecosystem adapters: npm/pnpm/yarn + Cargo first (they cover the workspace's stack), then Python (uv/poetry/requirements) and Go (§4.7). |
 | E2 | Inspect installed source/types/generated docs before the web (`node_modules/**/*.d.ts`, `$CARGO_HOME/registry/src`, dist-info, module cache) | Sol | **IMPLEMENT** | The locked version's own `.d.ts`/source is the ground truth Context7 approximates. Local-first also gives offline operation (Grok's eval criterion). |
-| E3 | Kill the hosted Context7 dependency entirely | Grok, Sol | **PARTIAL** | v1.1 already removed the third-party *MCP* (first-party HTTP client, optional key). Full removal is refuted for v2: for libraries with poor local artifacts, the hosted API is a useful **wrapped, optional, last-rank fallback** — exactly GPT's provider-abstraction and Qwen's adapter pattern (`docs` provider chain: local → official fetch → context7_http). A config flag (`TETHER_DOCS_OFFLINE=1`) disables all network retrieval. |
+| E3 | Kill the hosted Context7 dependency entirely | Grok, Sol | **PARTIAL** | v1.1 already removed the third-party *MCP* (first-party HTTP client, optional key). Full removal is refuted for v2: for libraries with poor local artifacts, the hosted API is a useful **wrapped, optional, last-rank fallback** — exactly GPT's provider-abstraction and Qwen's adapter pattern (`docs` provider chain: local → official fetch → context7_http). A config flag (`SENTINEL_DOCS_OFFLINE=1`) disables all network retrieval. |
 | E4 | Local docs index: BM25/FTS chunks, heading/symbol-aware, content-addressed; embeddings optional and only after lexical baselines | Grok, Sol | **IMPLEMENT (Phase 2)** | Start with `node:sqlite` FTS5 where available (no npm dep) with a JSONL scan fallback; embeddings deferred per Sol's "transparent retrieval first." |
 | E5 | Do not crawl/embed the public documentation web | Sol (non-goal) | **IMPLEMENT (non-goal)** | Refutes the maximal reading of Grok's docs engine. Ingestion is on-demand and project-scoped. |
 | E6 | Small chunks, hard token caps (≤6–8 items, ~100–160 words each, provenance line each), progressive expand | Grok, Sol, Qwen (compress) | **ALREADY IN v1.1 (upgrade)** | Pagination + caps + `continuationToken` exist for Context7 responses; v2 applies the same discipline to local retrieval and adds the per-item excerpt bounds. |
@@ -258,12 +258,12 @@ Positioning for GitHub (the README pitch, Rev 2): *"Your expensive model doesn't
 |---|---|---|---|---|
 | F1 | Durable local persistence (survives process restart); crash-safe | Perplexity, Sol, Qwen | **IMPLEMENT** | v1.1 is in-memory — a real gap (host restarts lose all chain state). v2: `node:sqlite` when available, append-only JSONL + content-addressed object dir as the dependency-free fallback; atomic write-rename; owner-only (0600/0700) perms. |
 | F2 | SQLite as a hard requirement (better-sqlite3/Postgres options) | Perplexity, Sol | **PARTIAL** | Requirement refuted for the npm release: a native-module dependency breaks frictionless `npx` install, which is the distribution model that made Sequential Thinking ubiquitous. `node:sqlite` (built-in) satisfies the intent with zero deps; JSONL fallback covers older Nodes. Sol's schema (its Appendix A) is adopted as the logical model regardless of engine (§4.8). |
-| F3 | Content-addressed cold-blob store for full payloads; model sees excerpts + refs | Perplexity, Sol, Grok (evidence ids) | **IMPLEMENT** | `~/.tether/objects/sha256/…` (or project `.tether/`). Dereference by id via `checkpoint` selectors or `tether-cli show`. |
+| F3 | Content-addressed cold-blob store for full payloads; model sees excerpts + refs | Perplexity, Sol, Grok (evidence ids) | **IMPLEMENT** | `~/.sentinel/objects/sha256/…` (or project `.sentinel/`). Dereference by id via `checkpoint` selectors or `sentinel-cli show`. |
 | F4 | Context objects with classes + lifecycle (keep/fold/mask/archive/retrieve/prune/invalidate); folds must be recoverable | Sol | **DEFER — Rev 2: moved to CodeRight track entirely** | An MCP server/CLI **cannot edit the host's context window** — that authority belongs to the harness, so `compact`/`recall` in the npm release could only store and return objects, hoping the host injects them. Rev 1 kept them as operations anyway; Rev 2 removes them from the v2 surface: they are the weakest ops without runtime ownership of context, and Sol's own supporting citations for this area are the ones this session did **not** verify (§1.5). They belong in CodeRight, where the runtime owns context and can act on fold/recall directly. The evidence store still keeps full payloads addressable by reference — that part ships (F3). |
 | F5 | Opaque/implicit compression is risky; explicit indexed state first | Sol | **IMPLEMENT (principle)** | "On Problems of Implicit Context Compression" (2026) negative result. All folds are explicit objects with dereferenceable payloads. |
 | F6 | Safe commit boundaries for folds; never fold an active failing trajectory before preserving error fingerprint/locators | Sol | **DEFER — Rev 2: follows F4** | Correct rule, but it governs the fold operation, which moved to the CodeRight track with F4. The surviving v2 trace of the same principle: the `PreCompact` hook template may warn (not block) when open `tool_failed` events lack a checkpoint. |
 | F7 | Append-only TODO list as the sticky useful artifact | Grok | **REFUTED (as core feature)** | Modern harnesses ship native task/todo tools (Claude Code TaskCreate/TaskUpdate, etc.); duplicating them creates two sources of truth. Plan steps live in `assess` output and their status in checkpoints; the host's own todo tool remains the todo surface. |
-| F8 | Memory taxonomy: episodic/semantic/procedural/mistakes; decay low-confidence memories | Qwen, M3 (three stores) | **PARTIAL** | Adopt the *typing* (fact/procedure/preference/heuristic/negative-lesson — Sol §12.2 refines Qwen's split) on memory candidates. Reject a Reflect-owned long-term memory *engine* with decay policies: this workspace already runs MemRight, and the GitHub audience runs their own memory layers. Reflect **proposes**; the memory system **owns**. |
+| F8 | Memory taxonomy: episodic/semantic/procedural/mistakes; decay low-confidence memories | Qwen, M3 (three stores) | **PARTIAL** | Adopt the *typing* (fact/procedure/preference/heuristic/negative-lesson — Sol §12.2 refines Qwen's split) on memory candidates. Reject a Reflect-owned long-term memory *engine* with decay policies: this workspace already runs Crypt, and the GitHub audience runs their own memory layers. Reflect **proposes**; the memory system **owns**. |
 | F9 | Memory quarantine: nothing becomes durable memory without evidence, scope, invalidation key, and approval; external content can never directly create memory | Sol, Perplexity (PUSH on finalize) | **IMPLEMENT** | `memory_candidates` table with `pending/approved/rejected/stale` status; `close` emits candidates; promotion happens only through explicit approval (host/user). Direct defense against memory poisoning. |
 | F10 | Negative lessons stored with conditions, not as absolute bans ("X failed under env E because C; reconsider if I changes") | Sol | **IMPLEMENT** | Field shape on `negative_lesson` memory kind. |
 | F11 | Async memory/indexing decoupled from the main loop, but no async worker may alter policy or approve actions | Sol (CoMem) | **DEFER** | Correct architecture note; v2 does synchronous capture + cheap indexing only. Revisit when indexing cost demands it. |
@@ -296,8 +296,8 @@ Positioning for GitHub (the README pitch, Rev 2): *"Your expensive model doesn't
 | H5 | Local transport hardening: stdio child process; owner-only store perms; no unauthenticated local HTTP | Sol (MCP security best practices) | **ALREADY IN v1.1 (keep)** | stdio-only today; telemetry files 0600. Any future HTTP/UDS transport inherits Sol's transport order and auth requirement. |
 | H6 | Model-controlled input cannot set internal authority (permission override, gate waiver, memory promotion) | Sol | **IMPLEMENT** | Caller-identity separation: tool calls are `model` authority; CLI/hook calls can carry `operator` authority via a local flag. Waivers and memory approval require non-model authority. |
 | H7 | Memory poisoning controls (no external-content → memory path; provenance labels on recall) | Sol | **IMPLEMENT** | Covered by F9 + H1; recall responses label provenance and authority. |
-| H8 | Redaction/export/delete by user/project | Perplexity | **IMPLEMENT (basic)** | `tether-cli purge --project/--session` + retention config. Full data-governance tooling deferred. |
-| H9 | Audit surface: what triggered retrieval, which source, version/hash, current-vs-stale, checks run, unresolved, proposed memories — but never a fabricated "full reasoning trace" | Sol, Perplexity (audit agent) | **PARTIAL** | The queryable audit surface ships (`tether-cli show`, resources `tether://run/{id}/state`). Perplexity's *nightly audit agent* is refuted as core (an ops add-on, not the tool); a `tether-cli audit` subcommand covering its checks (approved-without-checks, hash drift, stuck-open sessions) ships instead. |
+| H8 | Redaction/export/delete by user/project | Perplexity | **IMPLEMENT (basic)** | `sentinel-cli purge --project/--session` + retention config. Full data-governance tooling deferred. |
+| H9 | Audit surface: what triggered retrieval, which source, version/hash, current-vs-stale, checks run, unresolved, proposed memories — but never a fabricated "full reasoning trace" | Sol, Perplexity (audit agent) | **PARTIAL** | The queryable audit surface ships (`sentinel-cli show`, resources `sentinel://run/{id}/state`). Perplexity's *nightly audit agent* is refuted as core (an ops add-on, not the tool); a `sentinel-cli audit` subcommand covering its checks (approved-without-checks, hash drift, stuck-open sessions) ships instead. |
 
 ### 3.I Host integration and deployment surfaces
 
@@ -310,7 +310,7 @@ Positioning for GitHub (the README pitch, Rev 2): *"Your expensive model doesn't
 | I5 | Qwen Code / Cursor / Windsurf / Continue / Copilot rules-file coverage | Qwen, M3 | **IMPLEMENT (docs)** | README integration matrix + the same invariant snippet for each rules file. Zero code cost. |
 | I6 | Codex App Server bridge as the first-class Codex integration | Sol | **DEFER (CodeRight track)** | Correct for CodeRight-native integration; out of scope for the generic npm release, which reaches Codex via skill + hooks + MCP. |
 | I7 | Slash commands (`/reflect`, `/reflect-check`, toggles) | M3, Qwen (.claude/commands) | **IMPLEMENT (thin)** | Two command files shipping with the skill (`/reflect` → assess current task; `/reflect-check` → verify gate). Toggles refuted — triggers + skip conditions already scope usage. |
-| I8 | CI gate mode: re-run verifier on saved trajectory, fail build on ungrounded claims/skipped gates | M3, Codex `exec` pattern (Sol) | **IMPLEMENT (Phase 5)** | `tether-cli verify --gate signoff --json` exits non-zero on unmet policy — usable in CI directly. |
+| I8 | CI gate mode: re-run verifier on saved trajectory, fail build on ungrounded claims/skipped gates | M3, Codex `exec` pattern (Sol) | **IMPLEMENT (Phase 5)** | `sentinel-cli verify --gate signoff --json` exits non-zero on unmet policy — usable in CI directly. |
 | I9 | Replace, don't wrap: old tool names rejected with explicit migration error | Sol | **IMPLEMENT** | v2 is a semver-major. `sequentialthinking` calls return a migration error pointing at `reflect`; `resolve-library-id`/`query-docs` map onto `docs` with a deprecation cycle of one minor release. The workspace's own CLAUDE.md §4 reference to `mcp__reflect__sequentialthinking` must be updated at rollout (flagged in §5 checklist). |
 | I10 | UI evidence panel (claims/checks/unresolved badges) | Sol §14.10 | **DEFER (CodeRight track)** | No UI in the npm tool; the data model is designed so CodeRight (or any host) can render it. |
 
@@ -335,7 +335,7 @@ Positioning for GitHub (the README pitch, Rev 2): *"Your expensive model doesn't
 | K1 | CodeRight-native Rust crate (`coderight-reflect`), ToolContext extension, engine events, conductor/worker/jury/watchdog wiring, storage-crate migrations | Sol §14 | Separate CodeRight track. The v2 npm data model (§4.8) is deliberately kept congruent with Sol's Appendix A so a Rust port shares the logical schema. |
 | K2 | Codex App Server bridge | Sol §16.4 | CodeRight track (see I6). |
 | K3 | Desktop Evidence panel UI | Sol §14.10 | CodeRight track (see I10). |
-| K4 | Nightly audit agent as a service | Perplexity §9.2 | Replaced by `tether-cli audit` (H9). |
+| K4 | Nightly audit agent as a service | Perplexity §9.2 | Replaced by `sentinel-cli audit` (H9). |
 | K5 | LangGraph/DSPy program encoding of the loop | M3 §10.2 | Not this product; anyone can wire the CLI into a graph. |
 | K6 | Multi-agent reflexion fallback (second agent reflects when single-agent fails twice) | M3 | Host-side orchestration; the ledger supports it (escalation decision + shared run refs) without owning it. |
 
@@ -407,7 +407,7 @@ One tool merging v1.1's `resolve-library-id` + `query-docs`:
 }
 ```
 
-Provider chain (each hop recorded in provenance): lockfile/manifest resolution → installed source & type declarations → local docs cache/index → official tagged docs fetch (allowlisted domains) → Context7 HTTP (optional, `CONTEXT7_API_KEY`/enabled flag) → error with explicit "unverified" guidance. `TETHER_DOCS_OFFLINE=1` truncates the chain after the local cache. Responses keep v1.1's pagination, char caps, lossless splitting, and untrusted banner; every block carries `{package, version, source, locator, hash, retrieved_at}`.
+Provider chain (each hop recorded in provenance): lockfile/manifest resolution → installed source & type declarations → local docs cache/index → official tagged docs fetch (allowlisted domains) → Context7 HTTP (optional, `CONTEXT7_API_KEY`/enabled flag) → error with explicit "unverified" guidance. `SENTINEL_DOCS_OFFLINE=1` truncates the chain after the local cache. Responses keep v1.1's pagination, char caps, lossless splitting, and untrusted banner; every block carries `{package, version, source, locator, hash, retrieved_at}`.
 
 ### 4.4 Claim and evidence model
 
@@ -457,7 +457,7 @@ Ecosystem adapters, priority order: **npm/pnpm/yarn** and **Cargo** first; then 
 
 Logical schema = Sol Appendix A (adopted; keep congruent for a future Rust port): `reflection_runs, reflection_claims (+dependencies), reflection_evidence (+claim_evidence), reflection_decisions, reflection_rubrics, reflection_checks, reflection_context_objects (+edges), reflection_memory_candidates, reflection_source_documents/chunks (+FTS)`.
 
-Physical storage: `node:sqlite` when available; otherwise append-only JSONL per table + in-memory index rebuild on start. Content-addressed payloads under the store root (`objects/sha256/ab/cd…`), atomic write-rename, hash-verified, owner-only perms. Store root: project `.tether/` by default (per-repo state travels with the repo), `~/.tether/` for the shared docs/source cache; both configurable. Retention caps + `tether-cli purge`.
+Physical storage: `node:sqlite` when available; otherwise append-only JSONL per table + in-memory index rebuild on start. Content-addressed payloads under the store root (`objects/sha256/ab/cd…`), atomic write-rename, hash-verified, owner-only perms. Store root: project `.sentinel/` by default (per-repo state travels with the repo), `~/.sentinel/` for the shared docs/source cache; both configurable. Retention caps + `sentinel-cli purge`.
 
 ### 4.9 Distribution and host integration (the GitHub release)
 
@@ -470,7 +470,7 @@ reflect/
                           #   stop_hook_active guard), PreToolUse risky-command matcher
     codex/                # equivalents built against CURRENT Codex hook docs (never copied blind)
     generic/              # neutral JSON contract: {event,...} → {action: allow|continue|block|noop, ...}
-  cli.js                  # Layer 3 transport the hooks call: tether-cli <op> --json / show / audit /
+  cli.js                  # Layer 3 transport the hooks call: sentinel-cli <op> --json / show / audit /
                           #   purge / verify --gate (CI-ready exit codes)
   server.js               # Optional MCP stdio transport (2 tools: reflect, docs); preserves v1.1 hardening
   lib/                    # shared core: claims, evidence, verify/gates, store, resolver/, security, budget
@@ -489,7 +489,7 @@ reflect/
 - **Hooks:** deterministic filtering (I3); Stop hook uses `verify --gate signoff` with `stop_hook_active` guard.
 - **Instruction snippet:** §4.2 block, ≤10 lines, for CLAUDE.md/AGENTS.md/rules files.
 - **Migration:** semver-major; `sequentialthinking` returns a migration error naming `reflect`; `resolve-library-id`/`query-docs` alias to `docs` for one minor release, then error. Update this workspace's CLAUDE.md §4 (`mcp__reflect__sequentialthinking` reference) at rollout.
-- **Telemetry:** v1.1 system retained (content-free, bounded, local-only, `TETHER_TELEMETRY_ENABLED=0` opt-out documented in README — required for a public release).
+- **Telemetry:** v1.1 system retained (content-free, bounded, local-only, `SENTINEL_TELEMETRY_ENABLED=0` opt-out documented in README — required for a public release).
 
 ### 4.10 The weak-model case (Rev 2 — the actual market)
 
@@ -535,7 +535,7 @@ The smallest thing that changes agent behavior on any model:
 1. Merge resolve+query into `docs`; keep v1.1 pagination/caps/banner.
 2. Lockfile adapters: npm/pnpm/yarn + Cargo. Installed-source/types discovery with path allowlist, traversal/symlink/size guards, secret redaction.
 3. Local index (FTS5 or scan), heading/symbol-aware chunking, rerank with penalties (incl. harmful-context); provenance stamps on every block.
-4. Official-web fallback with domain allowlist + full SSRF suite; Context7 HTTP as final optional hop; `TETHER_DOCS_OFFLINE`.
+4. Official-web fallback with domain allowlist + full SSRF suite; Context7 HTTP as final optional hop; `SENTINEL_DOCS_OFFLINE`.
 5. Evidence auto-binding: `docs` results attach to open claims as evidence with invalidation keys.
 6. **Gate:** offline resolution of a locked npm + Cargo API with network denied; lockfile mutation flips the returned version and stales prior evidence; Context7 never contacted when disabled; wrong-version fixture suite <2% unsupported material API claims.
 7. Python + Go adapters after the gate, not before.

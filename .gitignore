@@ -1,6 +1,6 @@
-# Runtime state written by the tether core (claims, evidence, checks, payloads).
+# Runtime state written by the sentinel core (claims, evidence, checks, payloads).
 # Never commit: it contains project-specific excerpts and locators.
-.tether/
+.sentinel/
 # Pre-rename store directory, still ignored so old working copies stay clean.
 .reflect/
 

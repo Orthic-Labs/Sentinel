@@ -7,7 +7,7 @@
         "command": "node \"${CODEX_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/hooks/codex/hook.js\"",
         "commandWindows": "node \"$((if ($env:CODEX_PLUGIN_ROOT) { $env:CODEX_PLUGIN_ROOT } else { $env:CLAUDE_PLUGIN_ROOT }))\\hooks\\codex\\hook.js\"",
         "timeout": 10,
-        "statusMessage": "Checking Beacon risk gate..."
+        "statusMessage": "Checking Sentinel risk gate..."
       }]
     }],
     "PostToolUse": [{
@@ -17,7 +17,7 @@
         "command": "node \"${CODEX_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/hooks/codex/hook.js\"",
         "commandWindows": "node \"$((if ($env:CODEX_PLUGIN_ROOT) { $env:CODEX_PLUGIN_ROOT } else { $env:CLAUDE_PLUGIN_ROOT }))\\hooks\\codex\\hook.js\"",
         "timeout": 10,
-        "statusMessage": "Recording Beacon verification..."
+        "statusMessage": "Recording Sentinel verification..."
       }]
     }],
     "PostToolUseFailure": [{
@@ -27,7 +27,7 @@
         "command": "node \"${CODEX_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/hooks/codex/hook.js\"",
         "commandWindows": "node \"$((if ($env:CODEX_PLUGIN_ROOT) { $env:CODEX_PLUGIN_ROOT } else { $env:CLAUDE_PLUGIN_ROOT }))\\hooks\\codex\\hook.js\"",
         "timeout": 10,
-        "statusMessage": "Recording Beacon failure..."
+        "statusMessage": "Recording Sentinel failure..."
       }]
     }],
     "Stop": [{
@@ -36,7 +36,7 @@
         "command": "node \"${CODEX_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/hooks/codex/hook.js\"",
         "commandWindows": "node \"$((if ($env:CODEX_PLUGIN_ROOT) { $env:CODEX_PLUGIN_ROOT } else { $env:CLAUDE_PLUGIN_ROOT }))\\hooks\\codex\\hook.js\"",
         "timeout": 10,
-        "statusMessage": "Checking Beacon signoff..."
+        "statusMessage": "Checking Sentinel signoff..."
       }]
     }]
   }

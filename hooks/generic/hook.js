@@ -5,7 +5,7 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
-const { resolveHostDataDir, resolveDefaultStoreRoot, envFirst } = require('../../lib/host');
+const { resolveHostDataDir, envFirst } = require('../../lib/host');
 const { buildRetryFingerprint } = require('../../lib/budget');
 
 function main() {
@@ -14,7 +14,7 @@ function main() {
   if (result.action === 'block') process.exitCode = 1;
 }
 
-function evaluate(event, { root = envFirst('SENTINEL_ROOT', 'TETHER_ROOT', 'BEACON_ROOT') ?? path.resolve(__dirname, '../..'), projectRoot = process.cwd() } = {}) {
+function evaluate(event, { root = envFirst('SENTINEL_ROOT') ?? path.resolve(__dirname, '../..'), projectRoot = process.cwd() } = {}) {
   const cli = path.join(root, 'cli.js');
   const name = event.hook_event_name ?? event.event ?? event.type ?? '';
   let runId = event.run_id ?? event.runId;
@@ -40,8 +40,8 @@ function evaluate(event, { root = envFirst('SENTINEL_ROOT', 'TETHER_ROOT', 'BEAC
 
   if (!runId && (name === 'PreToolUse' || name === 'pre_tool_use')) {
     const command = String(event.command ?? event.tool_input?.command ?? '');
-    if (isRisky(command)) return { action: 'block', reason: 'high-risk command requires Beacon assess before execution' };
-    return { action: 'noop', reason: 'routine tool use without active beacon run' };
+    if (isRisky(command)) return { action: 'block', reason: 'high-risk command requires Sentinel assess before execution' };
+    return { action: 'noop', reason: 'routine tool use without active sentinel run' };
   }
 
   const validationEvents = ['Stop', 'stop', 'PostToolUse', 'post_tool_use', 'PostToolUseFailure', 'post_tool_use_failure'];
@@ -49,7 +49,7 @@ function evaluate(event, { root = envFirst('SENTINEL_ROOT', 'TETHER_ROOT', 'BEAC
     if ((name === 'Stop' || name === 'stop') && bindingStatus === 'closed' && !isCompletionIntent(event)) {
       return { action: 'noop', reason: 'conversational_stop' };
     }
-    return degraded('no active beacon run');
+    return degraded('no active sentinel run');
   }
 
   const isFailureEvent = name === 'PostToolUseFailure' || name === 'post_tool_use_failure'
@@ -118,8 +118,7 @@ function isCompletionIntent(event) {
 }
 
 function invoke(cli, command, input, projectRoot = process.cwd()) {
-  const hostDataDir = envFirst('SENTINEL_HOST_DATA', 'TETHER_HOST_DATA', 'BEACON_HOST_DATA') ?? resolveHostDataDir();
-  const storeRoot = envFirst('SENTINEL_STORE_ROOT', 'TETHER_STORE_ROOT', 'BEACON_STORE_ROOT') ?? resolveDefaultStoreRoot(projectRoot);
+  const hostDataDir = envFirst('SENTINEL_HOST_DATA') ?? resolveHostDataDir();
   const child = spawnSync(process.execPath, [cli, command, '--json'], {
     input: JSON.stringify(input),
     encoding: 'utf8',
@@ -128,13 +127,10 @@ function invoke(cli, command, input, projectRoot = process.cwd()) {
     env: {
       ...process.env,
       SENTINEL_HOST_DATA: hostDataDir,
-      TETHER_HOST_DATA: hostDataDir,
-      SENTINEL_STORE_ROOT: storeRoot,
-      TETHER_STORE_ROOT: storeRoot,
     },
   });
   if (child.error) return { decision: 'blocked', error: child.error.message };
-  try { return JSON.parse(child.stdout); } catch { return { decision: 'blocked', error: child.stderr || 'beacon-cli returned invalid JSON' }; }
+  try { return JSON.parse(child.stdout); } catch { return { decision: 'blocked', error: child.stderr || 'sentinel-cli returned invalid JSON' }; }
 }
 
 function degraded(reason) {

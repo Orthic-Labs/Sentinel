@@ -99,8 +99,8 @@ const child = spawn(process.execPath, [join(directory, 'server.js')], {
     CONTEXT7_MAX_RESPONSE_CHARS: '1200',
     CONTEXT7_MAX_BODY_BYTES: '20000',
     CONTEXT7_TIMEOUT_MS: '100',
-    TETHER_TELEMETRY_PATH: telemetryPath,
-    TETHER_LEGACY_TOOLS: '1',
+    SENTINEL_TELEMETRY_PATH: telemetryPath,
+    SENTINEL_LEGACY_TOOLS: '1',
   },
   stdio: ['pipe', 'pipe', 'pipe'],
   windowsHide: true,
@@ -456,7 +456,7 @@ try {
   }
 
   const limitedChild = spawn(process.execPath, [join(directory, 'server.js')], {
-    env: { ...process.env, TETHER_MAX_LINE_CHARS: '100', TETHER_TELEMETRY_ENABLED: '0', TETHER_LEGACY_TOOLS: '1' },
+    env: { ...process.env, SENTINEL_MAX_LINE_CHARS: '100', SENTINEL_TELEMETRY_ENABLED: '0', SENTINEL_LEGACY_TOOLS: '1' },
     stdio: ['pipe', 'pipe', 'pipe'],
     windowsHide: true,
   });
@@ -475,7 +475,7 @@ try {
   limitedChild.kill();
 
   const teardownChild = spawn(process.execPath, [join(directory, 'server.js')], {
-    env: { ...process.env, TETHER_TELEMETRY_PATH: teardownTelemetryPath, TETHER_LEGACY_TOOLS: '1' },
+    env: { ...process.env, SENTINEL_TELEMETRY_PATH: teardownTelemetryPath, SENTINEL_LEGACY_TOOLS: '1' },
     stdio: ['pipe', 'pipe', 'pipe'],
     windowsHide: true,
   });
@@ -520,9 +520,9 @@ try {
   const boundedChild = spawn(process.execPath, [join(directory, 'server.js')], {
     env: {
       ...process.env,
-      TETHER_TELEMETRY_PATH: boundedTelemetryPath,
-      TETHER_TELEMETRY_MAX_BYTES: '1500',
-      TETHER_LEGACY_TOOLS: '1',
+      SENTINEL_TELEMETRY_PATH: boundedTelemetryPath,
+      SENTINEL_TELEMETRY_MAX_BYTES: '1500',
+      SENTINEL_LEGACY_TOOLS: '1',
     },
     stdio: ['pipe', 'pipe', 'pipe'],
     windowsHide: true,
@@ -586,7 +586,7 @@ try {
     require(${JSON.stringify(join(directory, 'server.js'))});
   `;
   const backpressureChild = spawn(process.execPath, ['-e', backpressurePreload], {
-    env: { ...process.env, TETHER_TELEMETRY_ENABLED: '0', TETHER_LEGACY_TOOLS: '1' },
+    env: { ...process.env, SENTINEL_TELEMETRY_ENABLED: '0', SENTINEL_LEGACY_TOOLS: '1' },
     stdio: ['pipe', 'pipe', 'pipe'],
     windowsHide: true,
   });
@@ -629,8 +629,8 @@ try {
       ...process.env,
       CONTEXT7_API_BASE_URL: `http://127.0.0.1:${address.port}/api/v2`,
       CONTEXT7_MAX_CONCURRENT_REQUESTS: '1',
-      TETHER_TELEMETRY_ENABLED: '0',
-      TETHER_LEGACY_TOOLS: '1',
+      SENTINEL_TELEMETRY_ENABLED: '0',
+      SENTINEL_LEGACY_TOOLS: '1',
     },
     stdio: ['pipe', 'pipe', 'pipe'],
     windowsHide: true,
@@ -706,13 +706,13 @@ try {
   }
 
   const invalidEnvironment = spawnSync(process.execPath, [join(directory, 'server.js')], {
-    env: { ...process.env, TETHER_MAX_THOUGHTS: '500oops', TETHER_TELEMETRY_ENABLED: '0' },
+    env: { ...process.env, SENTINEL_MAX_THOUGHTS: '500oops', SENTINEL_TELEMETRY_ENABLED: '0' },
     encoding: 'utf8',
     windowsHide: true,
   });
   assert.notEqual(invalidEnvironment.status, 0);
   assert.match(invalidEnvironment.stderr, /positive integers/);
-  process.stdout.write('tether tests passed\n');
+  process.stdout.write('sentinel tests passed\n');
 } finally {
   lines.close();
   child.stdin.end();

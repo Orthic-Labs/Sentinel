@@ -2,9 +2,9 @@
 'use strict';
 
 const fs = require('node:fs');
-const { BeaconCore, ReflectCore } = require('./lib/core');
+const { SentinelCore } = require('./lib/core');
 const { resolveDocs } = require('./lib/docs');
-const { validateTrustedCaller, ensureHostToken, resolveHostDataDir, doctor } = require('./lib/host');
+const { validateTrustedCaller, doctor } = require('./lib/host');
 
 async function main(argv = process.argv.slice(2), inputText = readStdin()) {
   const { command, flags } = parseArgs(argv);
@@ -15,23 +15,16 @@ async function main(argv = process.argv.slice(2), inputText = readStdin()) {
     if (!value.ok) process.exitCode = 1;
     return;
   }
-  if (command === 'init' || command === 'host-init') {
-    const hostData = resolveHostDataDir();
-    const token = ensureHostToken(hostData);
-    const value = { host_data: hostData, host_token_initialized: Boolean(token), product: 'sentinel', alias: 'tether' };
-    process.stdout.write(`${JSON.stringify(value)}\n`);
-    return;
-  }
   const trusted = validateTrustedCaller({ hook: flags.hook, operator: flags.operator });
   const authority = trusted.authority;
-  const core = new BeaconCore({ authority, projectRoot: flags.project ?? process.cwd(), storeRoot: flags.store });
+  const core = new SentinelCore({ authority, projectRoot: flags.project ?? process.cwd(), storeRoot: flags.store });
   let value;
   if (command === 'docs') value = resolveDocs({ ...input, path: input.path ?? flags.project }, { projectRoot: flags.project ?? process.cwd(), store: core.store });
   else if (command === 'show') value = core.show(input.run_id ?? input.runId ?? flags.run);
   else if (command === 'resolve-session') value = core.resolveSession({ ...input, ...(flags.run ? { run_id: flags.run } : {}) });
   else if (command === 'audit') value = core.audit();
   else if (command === 'purge') value = core.purge(input.run_id ?? input.runId ?? flags.run);
-  else if (command === 'sentinel' || command === 'tether') value = core[input.operation ?? 'assess'](input, authority);
+  else if (command === 'sentinel') value = core[input.operation ?? 'assess'](input, authority);
   else if (['assess', 'checkpoint', 'verify', 'close'].includes(command)) value = core[command]({ ...input, ...(flags.gate ? { gate: flags.gate } : {}) }, authority);
   else throw new Error(`Unknown sentinel command: ${command}`);
   const rendered = JSON.stringify(value);
@@ -64,5 +57,4 @@ main().catch((error) => {
   process.exitCode = 1;
 });
 
-// Dual-alias export for tests / programmatic use.
-module.exports = { BeaconCore, ReflectCore };
+module.exports = { SentinelCore };

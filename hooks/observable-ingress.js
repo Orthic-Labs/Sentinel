@@ -1,11 +1,13 @@
 'use strict';
 
 const fs = require('node:fs');
+const { validateObservableEvent } = require('./observable-event');
 
 const MAX_RECORD_BYTES = 256 * 1024;
 
 function appendObservableEvent(event) {
-  const target = process.env.MEMRIGHT_TELEMETRY_INGRESS;
+  validateObservableEvent(event);
+  const target = process.env.CRYPT_TELEMETRY_INGRESS;
   if (!target) return { status: 'unavailable', reason: 'telemetry_ingress_unconfigured' };
   const record = Buffer.from(`${JSON.stringify({ observable_events: [event] })}\n`, 'utf8');
   if (record.length > MAX_RECORD_BYTES) return { status: 'unavailable', reason: 'telemetry_record_too_large' };
