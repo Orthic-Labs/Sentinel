@@ -7,6 +7,7 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const { resolveHostDataDir, envFirst } = require('../../lib/host');
 const { buildRetryFingerprint } = require('../../lib/budget');
+const lockedDomain = require('../../lib/locked-domain');
 
 function main() {
   const result = evaluate(readJson());
@@ -22,6 +23,15 @@ function evaluate(event, { root = envFirst('SENTINEL_ROOT') ?? path.resolve(__di
   const sessionId = event.session_id ?? event.sessionId ?? process.env.CODEX_SESSION_ID ?? process.env.CLAUDE_SESSION_ID;
   const taskId = event.task_id ?? event.taskId ?? null;
   const workspaceHash = event.workspace_hash ?? event.workspaceHash ?? null;
+  // Arm on evidence, before any branch can return: a locked path reached by ANY event in the
+  // session makes Sentinel mandatory for the rest of it, including the closing turn.
+  let armedDomains = [];
+  try {
+    armedDomains = lockedDomain.observe(event, sessionId, projectRoot);
+  } catch {
+    // A trigger that cannot record must not take the session down; the Stop gate below degrades
+    // explicitly rather than silently passing.
+  }
 
   if (name === 'Stop' && (event.stop_hook_active === true || event.stopHookActive === true)) {
     return { action: 'noop', reason: 'stop_hook_active' };
@@ -48,6 +58,16 @@ function evaluate(event, { root = envFirst('SENTINEL_ROOT') ?? path.resolve(__di
   if (!runId && validationEvents.includes(name)) {
     if ((name === 'Stop' || name === 'stop') && bindingStatus === 'closed' && !isCompletionIntent(event)) {
       return { action: 'noop', reason: 'conversational_stop' };
+    }
+    // The locked-domain case is the one this trigger exists for: the session touched a locked path
+    // and is now trying to conclude with NO Sentinel run at all. Blocking here is what forces the
+    // claim to be recorded and evidenced instead of asserted in a closing sentence.
+    if ((name === 'Stop' || name === 'stop') && armedDomains.length > 0 && isCompletionIntent(event)) {
+      return {
+        action: 'block',
+        reason: 'locked domain requires an active Sentinel run before completion',
+        locked_domains: armedDomains,
+      };
     }
     return degraded('no active sentinel run');
   }
@@ -94,6 +114,17 @@ function evaluate(event, { root = envFirst('SENTINEL_ROOT') ?? path.resolve(__di
     const verifyResult = invoke(cli, 'verify', { run_id: runId, gate: 'signoff' }, projectRoot);
     if (verifyResult.decision === 'blocked') {
       return { action: 'block', reason: 'signoff gate unmet', result: verifyResult };
+    }
+    // Degradation is explicit and carries the armed domains, never a silent pass. When the ledger
+    // or CLI is unavailable this surfaces as enforcement_degraded with a reason — an outage must be
+    // visible, because an invisible one becomes a bypass habit.
+    if (armedDomains.length > 0 && verifyResult.error) {
+      return {
+        action: 'enforcement_degraded',
+        reason: 'locked domain gate could not be evaluated',
+        locked_domains: armedDomains,
+        error: verifyResult.error,
+      };
     }
     const closeResult = invoke(cli, 'close', {
       run_id: runId,
