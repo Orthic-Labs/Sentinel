@@ -42,3 +42,59 @@ test('host adapter renders visible degraded state when client is unavailable', {
 test('ccx context stays bound to this installed workspace when profile cwd drifts', { concurrency: false }, () => {
   assert.equal(adapter.resolveWorkspaceRoot({ cwd: '/Users/adrdsouza/ClaudeProfiles/claudecodex-profile' }), '/Volumes/D/claude');
 });
+
+// G1 regression: render() used to serialize the whole packet -- block `text`
+// included -- into one JSON blob, so content reached the model while every block
+// still reported deliveryStage "planned" and deliveredChars 0. Delivery has to be
+// finalized and accounted, and bounded by the packet budget.
+test('selected content is rendered into the prompt and accounted as finalized', () => {
+  const packet = {
+    schema: 'orthic.context-packet.v1',
+    budget: { packetCharBudgetDefault: 30000, configuredPacketCharBudget: 30000 },
+    blocks: [
+      { id: 'rules:AGENTS.md', provider: 'rules', priority: 40, estimatedTokens: 10, resolver: 'read AGENTS.md', text: 'ALPHA-CONTENT-MARKER' },
+      { id: 'git:meta:branch', provider: 'git', priority: 10, estimatedTokens: 2, resolver: 'git rev-parse', text: 'BRAVO-CONTENT-MARKER' },
+    ],
+  };
+  const rendered = adapter.render({ state: 'context_enforced', payload: { packet, providerStatus: 'ready', receipts: [] } });
+
+  // The content is actually in the prompt.
+  assert.match(rendered, /ALPHA-CONTENT-MARKER/);
+  assert.match(rendered, /BRAVO-CONTENT-MARKER/);
+  // ...and it is labelled as data, not instruction.
+  assert.match(rendered, /instructionPolicy="data_only"/);
+  // ...and the header reports a non-zero delivered count.
+  assert.match(rendered, /\ndelivered: [1-9]\d* chars\n/);
+
+  for (const block of packet.blocks) {
+    assert.equal(block.deliveryStage, 'finalized');
+    assert.equal(block.deliveryClass, 'rendered');
+    assert.equal(block.dropReason, 'none');
+    assert.ok(block.deliveredChars > 0, `${block.id} delivered 0 chars`);
+  }
+  // Per-provider accounting sums to the blocks it covers.
+  assert.equal(packet.providerAccounting.rules.deliveredChars, packet.blocks[0].deliveredChars);
+  assert.equal(packet.providerAccounting.git.deliveredChars, packet.blocks[1].deliveredChars);
+  // The data block ships metadata only; content must not be duplicated.
+  const data = JSON.parse(/<membrane-context-data>(.*)<\/membrane-context-data>/s.exec(rendered)[1]);
+  assert.ok(data.packet.blocks.every((block) => block.text === undefined));
+});
+
+test('delivery stops at the packet budget instead of overrunning the prompt', () => {
+  const packet = {
+    budget: { packetCharBudgetDefault: 30000, configuredPacketCharBudget: 120 },
+    blocks: [
+      { id: 'kept', provider: 'rules', priority: 90, resolver: 'read a', text: 'K'.repeat(60) },
+      { id: 'dropped', provider: 'rules', priority: 10, resolver: 'read b', text: 'D'.repeat(400) },
+    ],
+  };
+  adapter.finalize(packet, 30000);
+  const [kept, dropped] = packet.blocks;
+  assert.equal(kept.dropReason, 'none');
+  assert.ok(kept.deliveredChars > 0);
+  assert.equal(dropped.dropReason, 'packet_budget_exceeded');
+  assert.equal(dropped.deliveredChars, 0);
+  assert.equal(dropped.deliveryClass, 'resolver_backed');
+  const total = packet.blocks.reduce((sum, block) => sum + block.deliveredChars, 0);
+  assert.ok(total <= packet.budget.effectivePacketCharBudget, `${total} > budget`);
+});
