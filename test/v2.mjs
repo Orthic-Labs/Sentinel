@@ -343,6 +343,20 @@ assert.equal(cli.status, 0, cli.stderr);
 assert.equal(JSON.parse(cli.stdout).decision, 'skip');
 assert.equal(JSON.parse(readFileSync(join(root, 'cli-store', 'events.jsonl'), 'utf8').split('\n')[0]).table, 'runs');
 
+// A criterion given as a bare string or with "text" must canonicalize at intake,
+// not survive assess and then fail the rubric at signoff.
+for (const [label, entry] of [['string', 'tests pass'], ['text alias', { id: 'aliased', text: 'tests pass' }]]) {
+  const aliasRun = core.assess({ summary: `Criterion shape: ${label}`, task_kind: 'feature', acceptance_criteria: [entry] });
+  const stored = core.store.get('runs', aliasRun.run_id).acceptance_criteria[0];
+  assert.equal(stored.criterion, 'tests pass', `${label} criterion text`);
+  assert.ok(stored.id, `${label} criterion id`);
+  assert.doesNotThrow(() => core.verify({ run_id: aliasRun.run_id }), `${label} rubric builds`);
+}
+assert.throws(
+  () => core.assess({ summary: 'Malformed criterion', task_kind: 'feature', acceptance_criteria: [{ id: 'nope' }] }),
+  /acceptance criterion 0 requires criterion text/,
+);
+
 const criterionRun = core.assess({
   summary: 'Criterion-gated feature',
   task_kind: 'feature',
