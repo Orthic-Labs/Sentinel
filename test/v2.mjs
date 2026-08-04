@@ -255,7 +255,7 @@ core.verify({
   rubric: { criteria: [{ id: 'v2-smoke', criterion: 'v2 smoke passes', verification: ['v2 smoke'], required_evidence_kinds: ['repo'] }] },
   checks: [{ kind: 'test', specification: 'v2 smoke', criterion_id: 'v2-smoke', executor: 'host', status: 'passed', output: 'ok' }],
 }, 'operator');
-const blockedClose = core.close({ run_id: assessed.run_id });
+const blockedClose = await core.close({ run_id: assessed.run_id });
 assert.equal(blockedClose.decision, 'blocked');
 assert.ok(blockedClose.gate.deficits.some((deficit) => deficit.code === 'insufficient_repo_evidence'));
 
@@ -266,23 +266,23 @@ assert.equal(attested.attestation_reason, 'verified_against_source');
 assert.match(attested.content_hash, /^sha256:[0-9a-f]{64}$/);
 // The source hash doubles as the invalidation key, so editing the file stales the evidence.
 assert.equal(attested.invalidation_key, attested.content_hash);
-const closed = core.close({ run_id: assessed.run_id });
+const closed = await core.close({ run_id: assessed.run_id });
 assert.equal(closed.decision, 'closed');
-assert.equal(core.close({ run_id: assessed.run_id }).idempotent, true);
+assert.equal((await core.close({ run_id: assessed.run_id })).idempotent, true);
 assert.ok(existsSync(join(store.root, 'events.jsonl')));
 assert.throws(() => core.checkpoint({ run_id: assessed.run_id, evidence: [{ kind: 'docs', trust_class: 'tool', excerpt: 'late mutation' }] }), /closed run/);
 
 const spoofed = core.assess({ summary: 'Reject spoofed check', task_kind: 'feature', claims: [{ id: 'spoofed-claim', text: 'package is present', kind: 'local_fact', materiality: 'critical' }] });
 core.checkpoint({ run_id: spoofed.run_id, claim_updates: [{ id: 'spoofed-claim', status: 'supported' }], evidence: [{ kind: 'docs', trust_class: 'tool', claim_ids: ['spoofed-claim'], excerpt: 'package docs exist' }, { kind: 'repo', trust_class: 'tool', claim_ids: ['spoofed-claim'], locator: 'package.json', excerpt: 'demo-lib' }] }, 'operator');
 core.verify({ run_id: spoofed.run_id, checks: [{ kind: 'test', specification: 'spoofed', executor: 'host', status: 'passed', output: 'model said ok' }] }, 'model');
-const spoofedClose = core.close({ run_id: spoofed.run_id });
+const spoofedClose = await core.close({ run_id: spoofed.run_id });
 assert.equal(spoofedClose.decision, 'blocked');
 assert.ok(spoofedClose.gate.deficits.some((deficit) => deficit.code === 'insufficient_passing_checks'));
 
 const unlinked = core.assess({ summary: 'Reject unlinked evidence', task_kind: 'feature', claims: [{ id: 'unlinked-claim', text: 'claim needs its own proof', kind: 'local_fact', materiality: 'critical' }] });
 core.checkpoint({ run_id: unlinked.run_id, claim_updates: [{ id: 'unlinked-claim', status: 'supported' }], evidence: [{ kind: 'docs', trust_class: 'tool', excerpt: 'generic docs exist' }, { kind: 'repo', trust_class: 'tool', locator: 'package.json', excerpt: 'demo-lib' }] }, 'operator');
 core.verify({ run_id: unlinked.run_id, checks: [{ kind: 'test', specification: 'real', executor: 'host', status: 'passed', output: 'ok' }] }, 'operator');
-const unlinkedClose = core.close({ run_id: unlinked.run_id });
+const unlinkedClose = await core.close({ run_id: unlinked.run_id });
 assert.equal(unlinkedClose.decision, 'blocked');
 assert.ok(unlinkedClose.gate.deficits.some((deficit) => deficit.code === 'supported_claim_without_matching_evidence'));
 
@@ -292,7 +292,7 @@ const stale = core.assess({ summary: 'Reject stale source evidence', task_kind: 
 core.checkpoint({ run_id: stale.run_id, claim_updates: [{ id: 'stale-claim', status: 'supported' }], evidence: [{ kind: 'docs', trust_class: 'tool', claim_ids: ['stale-claim'], excerpt: 'runtime docs exist' }, { kind: 'repo', trust_class: 'tool', claim_ids: ['stale-claim'], locator: 'live.js', excerpt: 'before' }] }, 'operator');
 core.verify({ run_id: stale.run_id, checks: [{ kind: 'test', specification: 'real', executor: 'host', status: 'passed', output: 'ok' }] }, 'operator');
 writeFileSync(liveFile, 'export const value = "after";\n');
-const staleClose = core.close({ run_id: stale.run_id });
+const staleClose = await core.close({ run_id: stale.run_id });
 assert.equal(staleClose.decision, 'blocked');
 assert.ok(staleClose.gate.deficits.some((deficit) => deficit.code === 'stale_evidence'));
 
@@ -369,14 +369,14 @@ core.checkpoint({
   evidence: [{ kind: 'repo', trust_class: 'tool', claim_ids: ['criterion-claim'], criterion_id: 'criterion-0', locator: 'package.json', excerpt: 'demo-lib' }],
 }, 'operator');
 core.verify({ run_id: criterionRun.run_id, checks: [{ kind: 'test', specification: 'npm test', criterion_id: 'criterion-0', executor: 'host', status: 'passed', output: 'ok' }] }, 'operator');
-const criterionBlocked = core.close({ run_id: criterionRun.run_id });
+const criterionBlocked = await core.close({ run_id: criterionRun.run_id });
 assert.equal(criterionBlocked.decision, 'blocked');
 assert.ok(criterionBlocked.gate.deficits.some((deficit) => deficit.code === 'supported_claim_without_matching_evidence'));
 core.checkpoint({
   run_id: criterionRun.run_id,
   evidence: [{ kind: 'test', trust_class: 'tool', claim_ids: ['criterion-claim'], excerpt: 'all tests passed' }],
 }, 'operator');
-const criterionClosed = core.close({ run_id: criterionRun.run_id });
+const criterionClosed = await core.close({ run_id: criterionRun.run_id });
 assert.equal(criterionClosed.decision, 'closed');
 
 const wrongClassRun = core.assess({
@@ -389,7 +389,7 @@ core.checkpoint({
   evidence: [{ kind: 'docs', trust_class: 'tool', claim_ids: ['wrong-class-claim'], excerpt: 'only docs, no repo proof' }],
 }, 'operator');
 core.verify({ run_id: wrongClassRun.run_id, checks: [{ kind: 'test', specification: 'smoke', executor: 'host', status: 'passed', output: 'ok' }] }, 'operator');
-const wrongClassClose = core.close({ run_id: wrongClassRun.run_id });
+const wrongClassClose = await core.close({ run_id: wrongClassRun.run_id });
 assert.equal(wrongClassClose.decision, 'blocked');
 assert.ok(wrongClassClose.gate.deficits.some((deficit) => deficit.code === 'supported_claim_without_matching_evidence'));
 
@@ -465,7 +465,7 @@ const contractVerify = core.verify({
   checks: [{ kind: 'test', specification: 'npm test -- contract', criterion_id: 'criterion-0', executor: 'host', status: 'passed', output: 'ok' }],
 }, 'operator');
 assert.equal(contractVerify.preflight.stub, true);
-const contractClosed = core.close({ run_id: contractRun.run_id });
+const contractClosed = await core.close({ run_id: contractRun.run_id });
 assert.equal(contractClosed.decision, 'closed');
 
 // Signoff must never qualify against an empty rubric.
@@ -478,7 +478,7 @@ core.verify({
   run_id: emptyRubricRun.run_id,
   checks: [{ kind: 'test', specification: 'anything', executor: 'host', status: 'passed', output: 'ok' }],
 }, 'operator');
-const emptyRubricClose = core.close({ run_id: emptyRubricRun.run_id }, 'operator');
+const emptyRubricClose = await core.close({ run_id: emptyRubricRun.run_id }, 'operator');
 assert.equal(emptyRubricClose.decision, 'blocked');
 assert.ok(emptyRubricClose.gate.deficits.some((row) => row.code === 'empty_signoff_rubric'));
 
@@ -508,7 +508,7 @@ atomicCore.verify({
   checks: [{ kind: 'test', specification: 'atomic-check', criterion_id: 'criterion-0', executor: 'host', status: 'passed', output: 'ok' }],
 }, 'operator');
 atomicStore.failNextBatchForTest?.();
-assert.throws(() => atomicCore.close({ run_id: atomicRun.run_id }, 'operator'), /injected batch failure/);
+await assert.rejects(() => atomicCore.close({ run_id: atomicRun.run_id }, 'operator'), /injected batch failure/);
 assert.notEqual(atomicStore.get('runs', atomicRun.run_id).status, 'closed');
 assert.equal(atomicStore.list('decisions').filter((row) => row.run_id === atomicRun.run_id && row.decision === 'closed').length, 0);
 

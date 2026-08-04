@@ -8,9 +8,21 @@ const require = createRequire(import.meta.url);
 const adapter = require('../hooks/membrane-context.js');
 const fakeClient = fileURLToPath(new URL('./fixtures/membrane-client.mjs', import.meta.url));
 
-test('host adapter derives ccx identity from gateway URL', () => {
-  assert.equal(adapter.defaultClient({ ANTHROPIC_BASE_URL: 'http://127.0.0.1:8801' }), 'ccx');
-  assert.equal(adapter.defaultClient({ ANTHROPIC_BASE_URL: 'https://api.anthropic.com' }), 'host-adapter');
+test('host adapter emits a typed client identity, never a gateway-derived alias', () => {
+  // Plan convention 3: the identity is one of claude_code | codex | mcp |
+  // api_worker | other. It used to be derived from ANTHROPIC_BASE_URL, which
+  // produced 'ccx'/'host-adapter' — deployment details, not client identities,
+  // and neither is in Membrane's SELF_LOADING_RULE_CLIENTS, so the rules
+  // capability split silently never engaged.
+  const TYPED = ['claude_code', 'codex', 'mcp', 'api_worker', 'other'];
+  assert.ok(TYPED.includes(adapter.defaultClient({ ANTHROPIC_BASE_URL: 'http://127.0.0.1:8801' })));
+  assert.equal(adapter.defaultClient({ ANTHROPIC_BASE_URL: 'http://127.0.0.1:8801' }), 'claude_code');
+  assert.equal(adapter.defaultClient({ ANTHROPIC_BASE_URL: 'https://api.anthropic.com' }), 'claude_code');
+  assert.equal(adapter.defaultClient({ CODEX_THREAD_ID: 'thread-1' }), 'codex');
+  // An explicit typed MEMBRANE_CLIENT wins; an untyped one degrades to 'other'
+  // rather than leaking a new ad-hoc string into telemetry.
+  assert.equal(adapter.defaultClient({ MEMBRANE_CLIENT: 'mcp' }), 'mcp');
+  assert.equal(adapter.defaultClient({ MEMBRANE_CLIENT: 'ccx' }), 'other');
 });
 
 test('host adapter emits bounded data-only delivery heartbeat for canonical request', { concurrency: false }, () => {

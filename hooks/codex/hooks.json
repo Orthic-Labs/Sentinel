@@ -1,43 +1,10 @@
 {
   "hooks": {
-    "PreToolUse": [{
-      "matcher": "shell|shell_command|Bash|PowerShell|Write|Edit|MultiEdit|apply_patch",
-      "hooks": [{
-        "type": "command",
-        "command": "node \"${CODEX_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/hooks/codex/hook.js\"",
-        "commandWindows": "node \"$((if ($env:CODEX_PLUGIN_ROOT) { $env:CODEX_PLUGIN_ROOT } else { $env:CLAUDE_PLUGIN_ROOT }))\\hooks\\codex\\hook.js\"",
-        "timeout": 10,
-        "statusMessage": "Checking Sentinel risk gate..."
-      }]
-    }],
-    "PostToolUse": [{
-      "matcher": "shell|shell_command|Bash|PowerShell",
-      "hooks": [{
-        "type": "command",
-        "command": "node \"${CODEX_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/hooks/codex/hook.js\"",
-        "commandWindows": "node \"$((if ($env:CODEX_PLUGIN_ROOT) { $env:CODEX_PLUGIN_ROOT } else { $env:CLAUDE_PLUGIN_ROOT }))\\hooks\\codex\\hook.js\"",
-        "timeout": 10,
-        "statusMessage": "Recording Sentinel verification..."
-      }]
-    }],
-    "PostToolUseFailure": [{
-      "matcher": "shell|shell_command|Bash|PowerShell|Write|Edit|MultiEdit|apply_patch",
-      "hooks": [{
-        "type": "command",
-        "command": "node \"${CODEX_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/hooks/codex/hook.js\"",
-        "commandWindows": "node \"$((if ($env:CODEX_PLUGIN_ROOT) { $env:CODEX_PLUGIN_ROOT } else { $env:CLAUDE_PLUGIN_ROOT }))\\hooks\\codex\\hook.js\"",
-        "timeout": 10,
-        "statusMessage": "Recording Sentinel failure..."
-      }]
-    }],
-    "Stop": [{
-      "hooks": [{
-        "type": "command",
-        "command": "node \"${CODEX_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/hooks/codex/hook.js\"",
-        "commandWindows": "node \"$((if ($env:CODEX_PLUGIN_ROOT) { $env:CODEX_PLUGIN_ROOT } else { $env:CLAUDE_PLUGIN_ROOT }))\\hooks\\codex\\hook.js\"",
-        "timeout": 10,
-        "statusMessage": "Checking Sentinel signoff..."
-      }]
-    }]
+    "SessionStart": [{ "hooks": [{ "type": "command", "command": "SENTINEL_HOST=codex node \"${CODEX_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/hooks/dispatcher.js\"" }] }],
+    "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "SENTINEL_HOST=codex node \"${CODEX_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/hooks/dispatcher.js\"" }] }],
+    "PreToolUse": [{ "matcher": "shell|shell_command|Bash|PowerShell|Write|Edit|MultiEdit|apply_patch", "hooks": [{ "type": "command", "command": "SENTINEL_HOST=codex node \"${CODEX_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/hooks/dispatcher.js\"", "timeout": 10 }] }],
+    "PostToolUse": [{ "matcher": "shell|shell_command|Bash|PowerShell", "hooks": [{ "type": "command", "command": "SENTINEL_HOST=codex node \"${CODEX_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/hooks/dispatcher.js\"", "timeout": 10 }] }],
+    "PostToolUseFailure": [{ "matcher": "shell|shell_command|Bash|PowerShell|Write|Edit|MultiEdit|apply_patch", "hooks": [{ "type": "command", "command": "SENTINEL_HOST=codex node \"${CODEX_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/hooks/dispatcher.js\"", "timeout": 10 }] }],
+    "Stop": [{ "hooks": [{ "type": "command", "command": "SENTINEL_HOST=codex node \"${CODEX_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/hooks/dispatcher.js\"", "timeout": 10 }] }]
   }
 }

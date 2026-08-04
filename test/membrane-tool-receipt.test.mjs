@@ -8,9 +8,14 @@ import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { activeTrace, buildReceipt, defaultClient } from '../hooks/claude-code/tool-receipt.js';
 
-test('Claude tool receipt derives ccx identity from gateway URL', () => {
-  assert.equal(defaultClient({ ANTHROPIC_BASE_URL: 'http://localhost:8801' }), 'ccx');
+test('Claude tool receipt emits a typed client identity', () => {
+  // Plan convention 3: receipts must attribute to the same typed identity the
+  // federation layer keys on. The gateway-URL probe that produced 'ccx' made
+  // telemetry and rules delivery disagree about who the client was.
+  assert.equal(defaultClient({ ANTHROPIC_BASE_URL: 'http://localhost:8801' }), 'claude_code');
   assert.equal(defaultClient({}), 'claude_code');
+  assert.equal(defaultClient({ MEMBRANE_CLIENT: 'api_worker' }), 'api_worker');
+  assert.equal(defaultClient({ MEMBRANE_CLIENT: 'ccx' }), 'other');
 });
 
 test('Claude tool receipt is hook-issued, typed, and content-free', () => {

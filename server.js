@@ -371,6 +371,13 @@ const sentinelToolSchema = {
     intent_restatement: { type: 'string', maxLength: 2_000 },
     blast_radius: { type: 'string', maxLength: 2_000 },
     why_safe: { type: 'string', maxLength: 2_000 },
+    time_receipt: {
+      type: 'object',
+      description: 'close-only: the planned total-minutes budget this run quoted (workspace rule 6.6). Actual active minutes are measured server-side from the tool-receipt ledger, never supplied by the caller.',
+      properties: { planned_minutes: { type: 'number', exclusiveMinimum: 0 } },
+      required: ['planned_minutes'],
+      additionalProperties: false,
+    },
   },
   required: ['operation'],
   allOf: [{
@@ -633,7 +640,7 @@ async function callTool(message) {
         projectRoot: process.cwd(),
       });
       const authority = hostTransportAuthorized ? 'host' : 'model';
-      const value = sentinelCore[args.operation]({ ...args }, authority);
+      const value = await sentinelCore[args.operation]({ ...args }, authority);
       value.operation = args.operation;
       result(message.id, textResult(value));
     } catch (coreError) {

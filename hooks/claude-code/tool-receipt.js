@@ -10,10 +10,19 @@ const { buildObservableEvent } = require('../observable-event.js');
 const digest = (value) => `sha256:${crypto.createHash('sha256').update(typeof value === 'string' ? value : JSON.stringify(value)).digest('hex')}`;
 const now = () => new Date().toISOString();
 
+// Plan convention 3: one typed client identity everywhere. Kept in sync with
+// hooks/membrane-context.js — telemetry and the rules capability split must
+// agree on the same string, or receipts attribute to a client that the
+// federation layer does not recognize.
+const CLIENT_IDENTITIES = Object.freeze(['claude_code', 'codex', 'mcp', 'api_worker', 'other']);
+
 function defaultClient(env = process.env) {
-  if (env.MEMBRANE_CLIENT) return env.MEMBRANE_CLIENT;
-  const base = String(env.ANTHROPIC_BASE_URL || '');
-  return /(?:127\.0\.0\.1|localhost):8801(?:\/|$)/.test(base) ? 'ccx' : 'claude_code';
+  if (env.MEMBRANE_CLIENT) {
+    return CLIENT_IDENTITIES.includes(env.MEMBRANE_CLIENT) ? env.MEMBRANE_CLIENT : 'other';
+  }
+  // This is the Claude Code hook set; the loopback ANTHROPIC_BASE_URL probe
+  // that used to yield 'ccx' described a gateway deployment, not a client.
+  return 'claude_code';
 }
 
 function first(event, keys, fallback = '') {

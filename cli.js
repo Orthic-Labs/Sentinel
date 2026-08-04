@@ -24,8 +24,8 @@ async function main(argv = process.argv.slice(2), inputText = readStdin()) {
   else if (command === 'resolve-session') value = core.resolveSession({ ...input, ...(flags.run ? { run_id: flags.run } : {}) });
   else if (command === 'audit') value = core.audit();
   else if (command === 'purge') value = core.purge(input.run_id ?? input.runId ?? flags.run);
-  else if (command === 'sentinel') value = core[input.operation ?? 'assess'](input, authority);
-  else if (['assess', 'checkpoint', 'verify', 'close'].includes(command)) value = core[command]({ ...input, ...(flags.gate ? { gate: flags.gate } : {}) }, authority);
+  else if (command === 'sentinel') value = await core[input.operation ?? 'assess'](input, authority);
+  else if (['assess', 'checkpoint', 'verify', 'close'].includes(command)) value = await core[command]({ ...input, ...(flags.gate ? { gate: flags.gate } : {}) }, authority);
   else throw new Error(`Unknown sentinel command: ${command}`);
   const rendered = JSON.stringify(value);
   process.stdout.write(`${rendered}\n`);

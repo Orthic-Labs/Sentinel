@@ -15,10 +15,27 @@ const REQUEST_TIMEOUT_MS = 1500;
 const MAX_CONTEXT_CHARS = 30 * 1000;
 const DEFAULT_PACKET_CHAR_BUDGET = 30000;
 
+// Plan convention 3: one typed client identity everywhere. Membrane's rules
+// provider keys self-loading behavior off this exact string
+// (SELF_LOADING_RULE_CLIENTS in engine/federation/providers/rules.py), so the
+// ad-hoc 'ccx'/'host-adapter' values silently disabled the capability split:
+// neither is a member, so self-loading hosts kept receiving inlined, truncated
+// duplicates of rules they already had.
+const CLIENT_IDENTITIES = Object.freeze(['claude_code', 'codex', 'mcp', 'api_worker', 'other']);
+
 function defaultClient(env = process.env) {
-  if (env.MEMBRANE_CLIENT) return env.MEMBRANE_CLIENT;
-  const base = String(env.ANTHROPIC_BASE_URL || '');
-  return /(?:127\.0\.0\.1|localhost):8801(?:\/|$)/.test(base) ? 'ccx' : 'host-adapter';
+  // An explicit MEMBRANE_CLIENT still wins (each host sets it in its own
+  // config), but it must be one of the typed identities — an unrecognized
+  // value degrades to 'other' rather than propagating a new ad-hoc string.
+  if (env.MEMBRANE_CLIENT) {
+    return CLIENT_IDENTITIES.includes(env.MEMBRANE_CLIENT) ? env.MEMBRANE_CLIENT : 'other';
+  }
+  // This hook ships in Claude Code's and Codex's hook sets; CLAUDE_* in the
+  // environment identifies the former. The ANTHROPIC_BASE_URL loopback probe
+  // that used to produce 'ccx' only distinguished a local gateway, which is a
+  // deployment detail, not a client identity.
+  if (env.CODEX_THREAD_ID || env.CODEX_SESSION_ID) return 'codex';
+  return 'claude_code';
 }
 
 function findClient(start) {
@@ -70,7 +87,80 @@ function buildRequest(event, root) {
   };
 }
 
+// Plan 2.5: the resident Crypt service already owns federation on loopback.
+// Spawning `node client.mjs` per prompt paid a cold Node start inside a
+// 1500 ms budget, which is what produced the observed `packet: null` /
+// `providerStatus: unavailable` failures under load (defect 28) — the work
+// was fine, the spawn just did not finish in time. Call the service directly
+// and keep the spawn as the fallback for hosts with no resident service.
+function residentPort() {
+  return String(process.env.CRYPT_PORT || process.env.WORKSPACE_MEMORY_PORT || '47851');
+}
+
+function residentToken(root) {
+  const raw = String(process.env.CRYPT_API_TOKEN || '').trim();
+  if (raw) return raw;
+  const candidates = [];
+  const override = String(process.env.CRYPT_API_TOKEN_FILE || '').trim();
+  if (override) candidates.push(override);
+  const workspace = String(process.env.WORKSPACE_ROOT || '').trim();
+  if (workspace) candidates.push(path.join(workspace, 'tools', '.cache', 'memory', 'api-token'));
+  let current = path.resolve(root);
+  for (;;) {
+    candidates.push(path.join(current, 'tools', '.cache', 'memory', 'api-token'));
+    const parent = path.dirname(current);
+    if (parent === current) break;
+    current = parent;
+  }
+  for (const candidate of candidates) {
+    try {
+      const token = fs.readFileSync(candidate, 'utf8').trim();
+      if (token) return token;
+    } catch { /* try the next candidate */ }
+  }
+  return '';
+}
+
+// Ask the resident service for a packet. Returns null when the service is not
+// reachable so the caller can fall back rather than fail the turn.
+function runResident(request, root) {
+  const token = residentToken(root);
+  if (!token) return null;
+  const body = JSON.stringify({
+    task: request.task,
+    repo: request.repo,
+    maxTokens: request.maxTokens,
+    client: request.client,
+    session: request.session,
+    anchors: request.anchors || '',
+  });
+  const result = childProcess.spawnSync(
+    'curl',
+    [
+      '--silent', '--show-error', '--fail-with-body',
+      '--max-time', String(REQUEST_TIMEOUT_MS / 1000),
+      '-H', 'Content-Type: application/json',
+      '-H', `Authorization: Bearer ${token}`,
+      '-X', 'POST', '--data-binary', '@-',
+      `http://127.0.0.1:${residentPort()}/federate`,
+    ],
+    { input: body, encoding: 'utf8', timeout: REQUEST_TIMEOUT_MS, windowsHide: true },
+  );
+  if (result.error || result.status !== 0) return null;
+  try {
+    const payload = JSON.parse(String(result.stdout || '').trim());
+    if (!payload || !payload.packet) return null;
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
 function runClient(request, root, options = {}) {
+  if (!options.client) {
+    const resident = runResident(request, root);
+    if (resident) return { state: 'context_enforced', request, payload: resident };
+  }
   const client = options.client || findClient(root);
   if (!client) return { state: 'degraded', reason: 'membrane_client_missing', request };
   const result = childProcess.spawnSync(process.execPath, [client, '--input', '-'], {
