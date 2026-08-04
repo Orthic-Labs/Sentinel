@@ -14,7 +14,7 @@
     "sentinel-cli": "cli.js"
   },
   "scripts": {
-    "test": "node --test test/*.test.mjs && node test.mjs && node test/v2.mjs",
+    "test": "node --test --test-concurrency=1 test/*.test.mjs test.mjs test/v2.mjs",
     "mcp": "node server.js"
   }
 }
