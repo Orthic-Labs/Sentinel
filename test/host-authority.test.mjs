@@ -39,7 +39,7 @@ test("same-user bearer token cannot mint host authority", async () => {
   const session = startServer(storeRoot);
   try {
     const initialized = await session.request(1, "initialize", {
-      protocolVersion: "2025-11-25", capabilities: {}, clientInfo: { name: "coderight-host", version: "test" },
+      protocolVersion: "2025-11-25", capabilities: {}, clientInfo: { name: "workspace-host", version: "test" },
     });
     assert.equal(initialized.result.serverInfo.name, "sentinel");
     session.notify("notifications/initialized", {});
@@ -63,7 +63,7 @@ test("a plain shell/process invocation cannot obtain host authority even with --
   // the *logic* is sound. This test proves the *real* code path holds: no injected options, no
   // mocked identity — the actual /bin/ps + codesign inspection on darwin (or the win32
   // equivalent) runs against this test's REAL parent process, which is plain `node` (or the
-  // shell that launched `node --test`), not a codesign-verified CodeRight.app. F15's premise
+  // shell that launched `node --test`), not a codesign-verified workspace host. F15's premise
   // ("any shell the agent can run can mint host authority") must be false end-to-end, not just
   // false when the caller supplies trustworthy mocks.
   const storeRoot = mkdtempSync(join(tmpdir(), "sentinel-host-real-parent-"));
@@ -117,15 +117,15 @@ test('responses expose current caller authority without inheriting run authority
   }
 });
 
-test("host stdio requires CodeRight parent identity", () => {
+test("host stdio requires signed workspace host parent identity", () => {
   const trusted = {
     platform: 'darwin',
-    readParentExecutable: () => "/Applications/CodeRight.app/Contents/Resources/coderight-engine/coderight",
+    readParentExecutable: () => "/Applications/SentinelHost.app/Contents/Resources/rhook/rhook",
     verifySignature: () => 'TeamIdentifier=6KLGD3LLKF',
   };
   const forged = {
     platform: 'darwin',
-    readParentExecutable: () => "/tmp/CodeRight.app/Contents/MacOS/CodeRight",
+    readParentExecutable: () => "/tmp/SentinelHost.app/Contents/MacOS/SentinelHost",
     verifySignature: () => 'TeamIdentifier=forged',
   };
   const shell = { readParentExecutable: () => "/bin/zsh" };
@@ -135,17 +135,17 @@ test("host stdio requires CodeRight parent identity", () => {
   assert.equal(isTrustedHostTransport([], trusted), false);
 });
 
-test('Windows host stdio requires valid Authenticode CodeRight identity', () => {
+test('Windows host stdio requires valid signed workspace host identity', () => {
   const trusted = {
     platform: 'win32',
     localAppData: 'C:\\Users\\Adrian\\AppData\\Local',
-    readParentExecutable: () => 'C:\\Users\\Adrian\\AppData\\Local\\CodeRight\\coderight-engine\\coderight.exe',
+    readParentExecutable: () => 'C:\\Users\\Adrian\\AppData\\Local\\SentinelHost\\rhook\\rhook.exe',
     verifyAuthenticode: () => ({ status: 'Valid', subject: 'CN=Damned Ventures LLC, O=Damned Ventures LLC' }),
   };
   const forgedName = {
     platform: 'win32',
     localAppData: 'C:\\Users\\Adrian\\AppData\\Local',
-    readParentExecutable: () => 'C:\\Temp\\CodeRight.exe',
+    readParentExecutable: () => 'C:\\Temp\\SentinelHost.exe',
     verifyAuthenticode: () => ({ status: 'Valid', subject: 'CN=Untrusted Publisher' }),
   };
   const unsignedShell = {
