@@ -2,8 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 test('per-host installation qualification matrix is executable', () => {
   for (const [host, file] of [['claude-code', 'hooks/claude-code/settings.json'], ['codex', 'hooks/codex/hooks.json']]) {

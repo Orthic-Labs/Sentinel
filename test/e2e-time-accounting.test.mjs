@@ -23,8 +23,11 @@ const { resolveDefaultStoreRoot } = require('../lib/host.js');
 const { actualActiveMinutes } = require('../lib/time-accounting.js');
 
 const REPO_ROOT = resolve(import.meta.dirname, '..', '..');
-const CRYPT_BIN = join(REPO_ROOT, 'membrane/engine/target/debug/crypt-service');
-const ONNX_DYLIB = join(REPO_ROOT, 'tools/bin/libonnxruntime.dylib');
+// The service resolves its ONNX runtime by platform (onnxruntime.dll on Windows,
+// libonnxruntime.dylib on macOS); the test must symlink the platform-correct one.
+const IS_WIN = process.platform === 'win32';
+const CRYPT_BIN = join(REPO_ROOT, 'membrane/engine/target/debug/crypt-service' + (IS_WIN ? '.exe' : ''));
+const ONNX_RUNTIME = join(REPO_ROOT, 'tools/bin/' + (IS_WIN ? 'onnxruntime.dll' : 'libonnxruntime.dylib'));
 
 // Pick a loopback port unlikely to be in use. The test will fail with a clear error if the
 // port is already bound, never silently fall back to the production resident.
@@ -121,7 +124,7 @@ async function ingestEvents(port, token, installationId, sessionId, taskId, dura
 }
 
 function spawnCryptService(workspaceRoot, port) {
-  const bin = join(workspaceRoot, 'tools/bin/crypt-service');
+  const bin = join(workspaceRoot, 'tools/bin/crypt-service' + (IS_WIN ? '.exe' : ''));
   // WORKSPACE_ROOT lets the binary resolve the symlink chain from a non-canonical location.
   const child = spawn(bin, [], {
     env: {
@@ -136,11 +139,40 @@ function spawnCryptService(workspaceRoot, port) {
   return child;
 }
 
+// Stop the spawned service and WAIT for it to actually exit. On Windows,
+// child.kill() only fires TerminateProcess; the process can still hold file
+// handles (installation.json, the engine DB) for a moment after the kill
+// returns. If the next test tries to atomically replace those files while the
+// previous service is still draining, it gets "Access is denied (os error 5)".
+// Awaiting 'close' (then falling back to a hard kill) makes cleanup deterministic
+// instead of racing the OS.
+function stopCryptService(child) {
+  if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve();
+  const exited = new Promise((resolveFn) => {
+    child.once('close', resolveFn);
+    child.once('error', resolveFn);
+  });
+  try {
+    child.kill('SIGTERM');
+  } catch {
+    // Already gone.
+  }
+  const hardKill = new Promise((resolveFn) => {
+    setTimeout(() => {
+      try {
+        child.kill('SIGKILL');
+      } catch {
+        // Already gone.
+      }
+      resolveFn();
+    }, 2_000).unref();
+  });
+  return Promise.race([exited, hardKill]);
+}
+
 test('time-accounting e2e: live tasklist -> close round-trip against the resident service', async (t) => {
   const workspaceRoot = mkdtempSync(join(tmpdir(), 'sentinel-e2e-'));
-  t.after(() => {
-    try { rmSync(workspaceRoot, { recursive: true, force: true }); } catch { /* best effort */ }
-  });
+  const port = pickFreePort();
 
   // Build the tools/bin layout the binary expects: a symlink to the freshly-built binary
   // sitting next to a symlink to the onnxruntime dylib, with a runtime.json that identifies
@@ -148,10 +180,9 @@ test('time-accounting e2e: live tasklist -> close round-trip against the residen
   mkdirSync(join(workspaceRoot, 'tools/bin'), { recursive: true });
   mkdirSync(join(workspaceRoot, 'tools/lib/memory'), { recursive: true });
   mkdirSync(join(workspaceRoot, 'tools/.cache/memory'), { recursive: true });
-  symlinkSync(CRYPT_BIN, join(workspaceRoot, 'tools/bin/crypt-service'));
-  symlinkSync(ONNX_DYLIB, join(workspaceRoot, 'tools/bin/libonnxruntime.dylib'));
+  symlinkSync(CRYPT_BIN, join(workspaceRoot, 'tools/bin/crypt-service' + (IS_WIN ? '.exe' : '')));
+  symlinkSync(ONNX_RUNTIME, join(workspaceRoot, 'tools/bin/' + (IS_WIN ? 'onnxruntime.dll' : 'libonnxruntime.dylib')));
 
-  const port = pickFreePort();
   writeFileSync(
     join(workspaceRoot, 'tools/lib/memory/runtime.json'),
     JSON.stringify({
@@ -166,8 +197,13 @@ test('time-accounting e2e: live tasklist -> close round-trip against the residen
   const runtimeConfigPath = join(workspaceRoot, 'tools/lib/memory/runtime.json');
 
   const service = spawnCryptService(workspaceRoot, port);
-  t.after(() => {
-    if (service.exitCode === null) service.kill('SIGTERM');
+  // Stop the service BEFORE removing the workspace: the child holds file handles
+  // in the temp dir, and rmSync while it is still running races the OS and can
+  // fail (Windows "Access is denied"). Awaiting the stop makes cleanup
+  // deterministic. (t.after callbacks run in registration order.)
+  t.after(async () => {
+    await stopCryptService(service);
+    try { rmSync(workspaceRoot, { recursive: true, force: true }); } catch { /* best effort */ }
   });
   service.stderr.on('data', (chunk) => process.stderr.write(`[crypt-service] ${chunk}`));
 
@@ -313,17 +349,14 @@ test('time-accounting e2e: planned budget slightly over actuals does not record 
   // threshold so .miss must be true. This second case exists so the test cannot pass by
   // silently ignoring the threshold; the assertion is exercised on both sides.
   const workspaceRoot = mkdtempSync(join(tmpdir(), 'sentinel-e2e-'));
-  t.after(() => {
-    try { rmSync(workspaceRoot, { recursive: true, force: true }); } catch { /* best effort */ }
-  });
+  const port = pickFreePort();
 
   mkdirSync(join(workspaceRoot, 'tools/bin'), { recursive: true });
   mkdirSync(join(workspaceRoot, 'tools/lib/memory'), { recursive: true });
   mkdirSync(join(workspaceRoot, 'tools/.cache/memory'), { recursive: true });
-  symlinkSync(CRYPT_BIN, join(workspaceRoot, 'tools/bin/crypt-service'));
-  symlinkSync(ONNX_DYLIB, join(workspaceRoot, 'tools/bin/libonnxruntime.dylib'));
+  symlinkSync(CRYPT_BIN, join(workspaceRoot, 'tools/bin/crypt-service' + (IS_WIN ? '.exe' : '')));
+  symlinkSync(ONNX_RUNTIME, join(workspaceRoot, 'tools/bin/' + (IS_WIN ? 'onnxruntime.dll' : 'libonnxruntime.dylib')));
 
-  const port = pickFreePort();
   writeFileSync(
     join(workspaceRoot, 'tools/lib/memory/runtime.json'),
     JSON.stringify({
@@ -335,8 +368,11 @@ test('time-accounting e2e: planned budget slightly over actuals does not record 
   );
 
   const service = spawnCryptService(workspaceRoot, port);
-  t.after(() => {
-    if (service.exitCode === null) service.kill('SIGTERM');
+  // Stop the service BEFORE removing the workspace (see the first test for why
+  // ordering matters on Windows).
+  t.after(async () => {
+    await stopCryptService(service);
+    try { rmSync(workspaceRoot, { recursive: true, force: true }); } catch { /* best effort */ }
   });
   service.stderr.on('data', (chunk) => process.stderr.write(`[crypt-service] ${chunk}`));
 

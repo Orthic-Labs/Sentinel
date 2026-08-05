@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import test from 'node:test';
@@ -26,7 +27,7 @@ test('host adapter emits a typed client identity, never a gateway-derived alias'
 });
 
 test('host adapter emits bounded data-only delivery heartbeat for canonical request', { concurrency: false }, () => {
-  const root = path.resolve('/tmp');
+  const root = tmpdir();
   const request = adapter.buildRequest({ event: 'UserPromptSubmit', prompt: 'inspect current graph', session_id: 'session-1', turn_id: 'turn-1' }, root);
   assert.equal(request.taskEnvelope.schema, 'orthic.task-envelope.v1');
   assert.equal(request.turnEnvelope.schema, 'orthic.turn-envelope.v1');
@@ -52,7 +53,10 @@ test('host adapter renders visible degraded state when client is unavailable', {
 });
 
 test('ccx context stays bound to this installed workspace when profile cwd drifts', { concurrency: false }, () => {
-  assert.equal(adapter.resolveWorkspaceRoot({ cwd: '/Users/adrdsouza/ClaudeProfiles/claudecodex-profile' }), '/Volumes/D/claude');
+  // The hook binds to its own installed workspace (path.resolve(__dirname,'..','..')),
+  // which is platform-specific — /Volumes/D/claude on Mac, D:\Claude on Windows.
+  const expectedRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+  assert.equal(adapter.resolveWorkspaceRoot({ cwd: '/Users/adrdsouza/ClaudeProfiles/claudecodex-profile' }), expectedRoot);
 });
 
 // G1 regression: render() used to serialize the whole packet -- block `text`
