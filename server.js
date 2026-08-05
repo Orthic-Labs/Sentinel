@@ -123,7 +123,7 @@ const evidenceInputSchema = {
     criterion_id: { type: 'string' },
     criterion_ids: { type: 'array', items: { type: 'string' }, maxItems: 30 },
     receipt: { type: 'string' },
-    blueprint_receipt: { type: 'string' },
+    cortex_receipt: { type: 'string' },
   },
   additionalProperties: false,
 };

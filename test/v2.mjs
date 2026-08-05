@@ -512,13 +512,13 @@ await assert.rejects(() => atomicCore.close({ run_id: atomicRun.run_id }, 'opera
 assert.notEqual(atomicStore.get('runs', atomicRun.run_id).status, 'closed');
 assert.equal(atomicStore.list('decisions').filter((row) => row.run_id === atomicRun.run_id && row.decision === 'closed').length, 0);
 
-// Blueprint orientation hook point
-const bpRun = core.assess({ summary: 'Blueprint orientation', claims: [{ id: 'bp-claim', text: 'oriented', kind: 'local_fact', materiality: 'useful' }] });
+// Cortex orientation hook point
+const bpRun = core.assess({ summary: 'Cortex orientation', claims: [{ id: 'bp-claim', text: 'oriented', kind: 'local_fact', materiality: 'useful' }] });
 core.checkpoint({
   run_id: bpRun.run_id,
-  evidence: [{ kind: 'blueprint_orientation', blueprint_receipt: 'orient-1', excerpt: 'flows mapped' }],
+  evidence: [{ kind: 'cortex_orientation', cortex_receipt: 'orient-1', excerpt: 'flows mapped' }],
 }, 'hook');
-assert.equal(store.list('evidence').find((row) => row.kind === 'blueprint_orientation').blueprint_orientation, true);
+assert.equal(store.list('evidence').find((row) => row.kind === 'cortex_orientation').cortex_orientation, true);
 
 // Incremental store projection still reads appended events
 const incrRoot = join(root, 'incr-store');
