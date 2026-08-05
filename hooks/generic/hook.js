@@ -8,6 +8,27 @@ const { spawnSync } = require('node:child_process');
 const { resolveHostDataDir, envFirst } = require('../../lib/host');
 const { buildRetryFingerprint } = require('../../lib/budget');
 const lockedDomain = require('../../lib/locked-domain');
+// Plan 2.6: decision-point routing for discovery tool calls. The logic lives in
+// Membrane's CJS module (single source of truth); the Sentinel PreToolUse hook
+// wires it into the live host path so a broad discovery grep gets a
+// membrane_context suggestion at the moment the agent is about to search,
+// rather than only as a passive session-start instruction.
+let decisionPoints = null;
+function loadDecisionPoints(root) {
+  if (decisionPoints) return decisionPoints;
+  // Resolve the membrane submodule relative to the sentinel repo.
+  const candidates = [
+    path.join(root, '..', 'membrane', 'mcp', 'decision-points-lib.cjs'),
+    path.resolve(__dirname, '..', '..', '..', 'membrane', 'mcp', 'decision-points-lib.cjs'),
+  ];
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) {
+      decisionPoints = require(candidate);
+      return decisionPoints;
+    }
+  }
+  return null;
+}
 
 function main() {
   const result = evaluate(readJson());
@@ -51,6 +72,11 @@ function evaluate(event, { root = envFirst('SENTINEL_ROOT') ?? path.resolve(__di
   if (!runId && (name === 'PreToolUse' || name === 'pre_tool_use')) {
     const command = String(event.command ?? event.tool_input?.command ?? '');
     if (isRisky(command)) return { action: 'block', reason: 'high-risk command requires Sentinel assess before execution' };
+    // Plan 2.6: even without an active Sentinel run, a broad discovery tool
+    // call gets a non-blocking membrane_context suggestion. The agent may
+    // still proceed — this never blocks, it only advises at the decision point.
+    const suggestion = discoverySuggestion(event, root);
+    if (suggestion) return { action: 'noop', reason: 'routine tool use without active sentinel run', suggestion };
     return { action: 'noop', reason: 'routine tool use without active sentinel run' };
   }
 
@@ -102,7 +128,13 @@ function evaluate(event, { root = envFirst('SENTINEL_ROOT') ?? path.resolve(__di
 
   if (name === 'PreToolUse' || name === 'pre_tool_use') {
     const command = String(event.command ?? event.tool_input?.command ?? '');
-    if (!isRisky(command)) return { action: 'noop', reason: 'routine tool use' };
+    if (!isRisky(command)) {
+      // Plan 2.6: a non-risky tool call may still be a broad discovery sweep.
+      // Surface the membrane_context suggestion (non-blocking) before allowing.
+      const suggestion = discoverySuggestion(event, root);
+      if (suggestion) return { action: 'allow', reason: 'routine tool use', suggestion };
+      return { action: 'noop', reason: 'routine tool use' };
+    }
     const result = invoke(cli, 'verify', {
       run_id: runId, gate: 'high_risk',
       intent_restatement: event.intent_restatement, blast_radius: event.blast_radius, why_safe: event.why_safe,
@@ -174,6 +206,24 @@ function degraded(reason) {
 
 function isRisky(command) {
   return /\brm\s+-(?:[^\s-]*r[^\s-]*f|[^\s-]*f[^\s-]*r)\b|git\s+push\b[^\n]*(?:--force(?:-with-lease)?|-f\b)|drop\s+(database|table)|\bcurl\b[^\n|]*\|\s*(sh|bash)|wrangler\s+(deploy|delete)|terraform\s+(apply|destroy)/i.test(command);
+}
+
+// Plan 2.6: classify a tool call through Membrane's decision-point router and
+// return its suggestion when the call is a broad or cross-repo discovery. The
+// routing never blocks — a SUGGEST/ROUTE decision is returned as advisory text
+// the host can surface; PASS decisions return null so nothing is emitted.
+function discoverySuggestion(event, root) {
+  const lib = loadDecisionPoints(root);
+  if (!lib) return null;
+  try {
+    const decision = lib.routeToolCall(event);
+    if (decision && (decision.decision === lib.SUGGEST || decision.decision === lib.ROUTE)) {
+      return decision.suggestion || null;
+    }
+  } catch {
+    // A classification error must never block the tool call.
+  }
+  return null;
 }
 
 function readJson() { try { return JSON.parse(fs.readFileSync(0, 'utf8')); } catch { return {}; } }
