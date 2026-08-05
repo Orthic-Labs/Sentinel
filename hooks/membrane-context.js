@@ -190,27 +190,15 @@ function runClient(request, root, options = {}) {
 // Delegates to the Membrane CJS lib (plan 2.2) — ONE implementation, never a copy.
 const finalize = rendererLib.finalize;
 
-// Per-session delivery ledger (plan 2.3). SessionStart and UserPromptSubmit both
-// fire this hook in the same session, so an unchanged turn must NOT reship the
-// same block twice. The ledger is keyed by session id (live hook) or, when no
-// session is identifiable, by a deterministic fingerprint of the packet itself
-// — so two consecutive render() calls with the same packet also dedup, which
-// is what Phase 0 E2E-8 asserts. A reset hook is exported for tests.
-//
-// CJS-side mirror of membrane/mcp/context-renderer.mjs#ContextSessionV1. The
-// authoritative ledger lives in the ESM renderer; this one exists so the
-// CommonJS host adapter can answer the dedup contract without a synchronous
-// ESM import (defect 28 — synchronous require() of ESM is forbidden). Both
-// ledgers stamp the same delivery facts; the renderer-side one carries the
-// richer rule-vs-context classification.
-const deliveryLedger = new Map();
+// Per-session delivery ledger (plan 2.3). The authoritative implementation
+// lives in the CJS lib (context-renderer-lib.cjs). The sentinel hook uses an
+// instance of ContextSessionV1 for block-level dedup via applyDeliveryLedger.
+// The session is keyed by session id from the result/request, falling back to
+// a content-addressed hash of the packet's blocks.
 
 function ledgerKey(result, packet) {
   const session = result.request && result.request.session;
   if (session) return `session:${session}`;
-  // Fallback for callers (tests) that do not pass a session: hash the packet's
-  // block identity so identical packets share a ledger and unrelated packets
-  // do not. This is content-addressed, never string-matching the output.
   if (packet && Array.isArray(packet.blocks)) {
     const ids = packet.blocks.map((block) => `${block.id || 'block'}:${digest(block.text || '')}`).join('|');
     return `packet:${digest(ids)}`;
@@ -218,45 +206,29 @@ function ledgerKey(result, packet) {
   return 'packet:default';
 }
 
-function applyLedger(result, packet) {
-  const key = ledgerKey(result, packet);
-  let record = deliveryLedger.get(key);
-  if (!record) { record = new Set(); deliveryLedger.set(key, record); }
-  // Suppress blocks already delivered to this session. We blank `text` so
-  // finalize() emits no body for them; the per-block delivery accounting still
-  // runs, just with `deliveryClass: metadata_only` instead of `rendered`.
-  for (const block of (packet.blocks || [])) {
-    const id = String(block.id || 'block');
-    if (record.has(id) && typeof block.text === 'string' && block.text.length > 0) {
-      block.text = '';
-      block.dropReason = 'already_delivered';
-    }
-  }
-  return { key, record };
-}
+// Per-key session instances. A reset hook is exported for tests.
+const sessionLedger = new Map();
 
-function recordLedger(packet, key, record) {
-  for (const block of (packet.blocks || [])) {
-    if (block.deliveryClass === 'rendered' && block.deliveredChars > 0) {
-      record.add(String(block.id || 'block'));
-    }
+function getOrCreateSession(result, packet) {
+  const key = ledgerKey(result, packet);
+  let session = sessionLedger.get(key);
+  if (!session) {
+    session = new rendererLib.ContextSessionV1({ sessionId: key });
+    sessionLedger.set(key, session);
   }
-  // A packet whose nothing rendered does not extend the ledger; an unchanged
-  // session must keep producing nothing, not flip to "delivered" on the next
-  // turn because the Set got an entry.
-  return key;
+  return session;
 }
 
 function __resetDeliveryLedger() {
-  deliveryLedger.clear();
+  sessionLedger.clear();
 }
 
 function render(result) {
   const payload = result.payload || {};
   const packet = result.state === 'context_enforced' ? payload.packet : null;
-  const ledger = packet ? applyLedger(result, packet) : null;
+  const session = packet ? getOrCreateSession(result, packet) : null;
+  if (packet && session) rendererLib.applyDeliveryLedger(packet, session);
   const delivery = packet ? finalize(packet, MAX_CONTEXT_CHARS) : { body: '', deliveredChars: 0 };
-  if (ledger) recordLedger(packet, ledger.key, ledger.record);
   // The rendered body carries the content, so the data block ships metadata only.
   // Keeping `text` here too would double every byte inside the same prompt and
   // put the packet straight through the 64 KB bound for no added information.
