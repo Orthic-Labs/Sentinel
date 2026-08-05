@@ -1,4 +1,4 @@
-// Plan 2.6: the Sentinel PreToolUse hook must wire Membrane's decision-point
+// Plan 2.6: the Forge PreToolUse hook must wire Membrane's decision-point
 // router into the live host path. The library (decision-points.mjs) was already
 // implemented; this test proves the hook actually calls it — the
 // "implemented != wired" failure mode the plan was written to close.

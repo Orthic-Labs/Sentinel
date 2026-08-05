@@ -1,7 +1,7 @@
 // Plan 6.4: test-hygiene guard.
 //
-// Prevents the regression that codex-profile.test.mjs was: a Sentinel test
-// reading another repo's prose. This guard reads every sentinel/test/*.mjs
+// Prevents the regression that codex-profile.test.mjs was: a Forge test
+// reading another repo's prose. This guard reads every forge/test/*.mjs
 // and fails on any path literal escaping the repo (../../, /Volumes/, or an
 // absolute workspace path). No allowlist today — if one becomes necessary it
 // carries an inline comment naming the evidence for it.
@@ -13,9 +13,9 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const SENTINEL_ROOT = resolve(HERE, "..");
+const FORGE_ROOT = resolve(HERE, "..");
 
-// Patterns that indicate a path escaping the sentinel repo into the
+// Patterns that indicate a path escaping the forge repo into the
 // workspace or filesystem — exactly the failure mode codex-profile.test.mjs had.
 // The ../../ pattern is the strongest signal (going up two levels from test/).
 // /Volumes/ and absolute paths only matter when combined with file I/O calls.
@@ -34,7 +34,7 @@ const ALLOWED_IMPORTS = new Set([
   "../../membrane/mcp/context-renderer-lib.cjs",
 ]);
 
-test("no Sentinel test file contains path literals that escape the repo", () => {
+test("no Forge test file contains path literals that escape the repo", () => {
   const testFiles = readdirSync(HERE).filter(
     (f) => f.endsWith(".test.mjs") && f !== "repo-isolation.test.mjs",
   );
@@ -55,7 +55,7 @@ test("no Sentinel test file contains path literals that escape the repo", () => 
         if (!isAllowed) {
           assert.fail(
             `${file}: contains path escape pattern ${pattern} (${match[0]}) — ` +
-              "Sentinel tests must read only their own repo; external prose becomes frozen local fixtures",
+              "Forge tests must read only their own repo; external prose becomes frozen local fixtures",
           );
         }
         break; // one match per pattern per file is enough

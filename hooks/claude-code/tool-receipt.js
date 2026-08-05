@@ -65,8 +65,8 @@ function buildReceipt(event) {
     task_id: taskId,
     turn_id: turnId,
     tool_call_id: callId,
-    issuer_id: 'sentinel-claude-hook',
-    issuer_capability_digest: digest('sentinel-claude-hook:v1'),
+    issuer_id: 'forge-claude-hook',
+    issuer_capability_digest: digest('forge-claude-hook:v1'),
     tool_class: String(first(event, ['tool_name', 'toolName'], 'unknown-tool')),
     operation: String(first(event, ['operation'], 'execute')),
     scope: [String(first(event, ['cwd', 'working_directory'], process.cwd()))],
@@ -98,7 +98,7 @@ function main() {
     policyDigest: receipt.issuer_capability_digest, timestamp: receipt.completed_at,
   });
   const eventStore = appendObservableEvent(observable);
-  process.stdout.write(`${JSON.stringify({ hookSpecificOutput: { hookEventName: eventName, additionalContext: `Sentinel: tool_receipt\nevent_store: ${eventStore.status}\n<sentinel-tool-receipt>${JSON.stringify({ receipt, observable, eventStore, dataOnly: true })}</sentinel-tool-receipt>` } })}\n`);
+  process.stdout.write(`${JSON.stringify({ hookSpecificOutput: { hookEventName: eventName, additionalContext: `Forge: tool_receipt\nevent_store: ${eventStore.status}\n<forge-tool-receipt>${JSON.stringify({ receipt, observable, eventStore, dataOnly: true })}</forge-tool-receipt>` } })}\n`);
 }
 
 if (require.main === module) main();

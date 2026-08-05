@@ -1,12 +1,12 @@
-# Sentinel Rules
+# Forge Rules
 
 ## Purpose
-Sentinel binds material claims to evidence, checks, criteria, and durable signoff state.
+Forge binds material claims to evidence, checks, criteria, and durable signoff state.
 Keep model assertions distinct from trusted executable or host evidence.
 
 ## Canonical sources
 - Read `README.md` for lifecycle and trust behavior.
-- Read `SENTINEL-MASTER.md` for adjudicated contracts.
+- Read `FORGE-MASTER.md` for adjudicated contracts.
 - Read `docs/architecture.md` and `docs/integration-matrix.md` for adapters and flows.
 - Read `docs/store-migration.md` before persistence changes.
 

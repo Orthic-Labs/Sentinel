@@ -11,7 +11,7 @@ import {
 } from '../lib/time-accounting.js';
 
 function writeConfig(contents) {
-  const dir = mkdtempSync(join(tmpdir(), 'sentinel-time-'));
+  const dir = mkdtempSync(join(tmpdir(), 'forge-time-'));
   const file = join(dir, 'runtime.json');
   writeFileSync(file, JSON.stringify(contents));
   return file;

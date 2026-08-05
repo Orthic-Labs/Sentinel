@@ -1,17 +1,17 @@
 {
-  "name": "@orthic-labs/sentinel",
+  "name": "@orthic-labs/forge",
   "version": "2.0.1",
-  "description": "Sentinel evidence gate: claim/evidence/check ledgers, exact-version docs, and model-independent enforcement hooks.",
+  "description": "Forge evidence gate: claim/evidence/check ledgers, exact-version docs, and model-independent enforcement hooks.",
   "license": "SEE LICENSE IN LICENSE",
-  "homepage": "https://github.com/Orthic-Labs/Sentinel#readme",
-  "repository": { "type": "git", "url": "git+https://github.com/Orthic-Labs/Sentinel.git" },
-  "bugs": { "url": "https://github.com/Orthic-Labs/Sentinel/issues" },
-  "keywords": ["mcp", "agent", "sentinel", "verification", "evidence", "hooks", "claude-code", "codex"],
+  "homepage": "https://github.com/Orthic-Labs/Forge#readme",
+  "repository": { "type": "git", "url": "git+https://github.com/Orthic-Labs/Forge.git" },
+  "bugs": { "url": "https://github.com/Orthic-Labs/Forge/issues" },
+  "keywords": ["mcp", "agent", "forge", "verification", "evidence", "hooks", "claude-code", "codex"],
   "type": "commonjs",
   "engines": { "node": ">=20" },
   "bin": {
-    "sentinel": "server.js",
-    "sentinel-cli": "cli.js"
+    "forge": "server.js",
+    "forge-cli": "cli.js"
   },
   "scripts": {
     "test": "node --test --test-concurrency=1 test/*.test.mjs test.mjs test/v2.mjs",

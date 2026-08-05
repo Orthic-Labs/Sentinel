@@ -9,7 +9,7 @@ const { appendObservableEvent } = require('./observable-ingress.js');
 const { buildObservableEvent } = require('./observable-event.js');
 
 // Plan 2.2: the rendering core (finalize, constants) lives in Membrane's CJS
-// module. The sentinel hook requires it directly — this eliminates the
+// module. The forge hook requires it directly — this eliminates the
 // "two renderers" split where the hook carried a verbatim copy that could
 // drift from the authoritative implementation.
 const rendererLib = require('../../membrane/mcp/context-renderer-lib.cjs');
@@ -191,7 +191,7 @@ function runClient(request, root, options = {}) {
 const finalize = rendererLib.finalize;
 
 // Per-session delivery ledger (plan 2.3). The authoritative implementation
-// lives in the CJS lib (context-renderer-lib.cjs). The sentinel hook uses an
+// lives in the CJS lib (context-renderer-lib.cjs). The forge hook uses an
 // instance of ContextSessionV1 for block-level dedup via applyDeliveryLedger.
 // The session is keyed by session id from the result/request, falling back to
 // a content-addressed hash of the packet's blocks.

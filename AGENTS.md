@@ -27,7 +27,7 @@
 ## Mandatory systems
 - Use Crypt shims for durable memory; treat runtime storage as truth & Markdown as export.
 - Honor Membrane packets & report typed degradation without overstating enforcement.
-- Use Sentinel assess through close for architecture, non-obvious debugging, repeated failures, or signoff; locked-domain paths make it mandatory on evidence.
+- Use Forge assess through close for architecture, non-obvious debugging, repeated failures, or signoff; locked-domain paths make it mandatory on evidence.
 - Let rhook enforce Brief, Minimize, model caps, & safety guards; debug gates instead of bypassing them.
 - Run `tools/pipelines/hooks/status.py` for unhealthy context or hooks.
 - Run matching thread guard before substantial work; at CRITICAL, start a fresh task unless Adrian directs continuation after seeing its result.
@@ -56,15 +56,15 @@
 - Run focused checks first, then verification proportional to blast radius.
 - Require concrete behavior or artifact evidence before completion.
 
-# Sentinel Rules
+# Forge Rules
 
 ## Purpose
-Sentinel binds material claims to evidence, checks, criteria, and durable signoff state.
+Forge binds material claims to evidence, checks, criteria, and durable signoff state.
 Keep model assertions distinct from trusted executable or host evidence.
 
 ## Canonical sources
 - Read `README.md` for lifecycle and trust behavior.
-- Read `SENTINEL-MASTER.md` for adjudicated contracts.
+- Read `FORGE-MASTER.md` for adjudicated contracts.
 - Read `docs/architecture.md` and `docs/integration-matrix.md` for adapters and flows.
 - Read `docs/store-migration.md` before persistence changes.
 

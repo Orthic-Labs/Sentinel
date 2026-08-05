@@ -5,7 +5,7 @@
 //
 // The test uses a temp workspace symlink to the freshly-built crypt-service binary on a
 // loopback port that has nothing else listening on it, so it never touches the production
-// resident service on 47851. It also uses a temp Sentinel storeRoot so no real Sentinel state
+// resident service on 47851. It also uses a temp Forge storeRoot so no real Forge state
 // is written.
 
 import assert from 'node:assert/strict';
@@ -17,7 +17,7 @@ import { join, resolve } from 'node:path';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const { SentinelCore } = require('../lib/core.js');
+const { ForgeCore } = require('../lib/core.js');
 const { createStore } = require('../lib/store.js');
 const { resolveDefaultStoreRoot } = require('../lib/host.js');
 const { actualActiveMinutes } = require('../lib/time-accounting.js');
@@ -171,7 +171,7 @@ function stopCryptService(child) {
 }
 
 test('time-accounting e2e: live tasklist -> close round-trip against the resident service', async (t) => {
-  const workspaceRoot = mkdtempSync(join(tmpdir(), 'sentinel-e2e-'));
+  const workspaceRoot = mkdtempSync(join(tmpdir(), 'forge-e2e-'));
   const port = pickFreePort();
 
   // Build the tools/bin layout the binary expects: a symlink to the freshly-built binary
@@ -192,7 +192,7 @@ test('time-accounting e2e: live tasklist -> close round-trip against the residen
       port,
     }),
   );
-  // Mirror runtime.json to the location the Sentinel time-accounting reader resolves by default,
+  // Mirror runtime.json to the location the Forge time-accounting reader resolves by default,
   // so the round-trip uses the same identity the test asserted.
   const runtimeConfigPath = join(workspaceRoot, 'tools/lib/memory/runtime.json');
 
@@ -229,20 +229,20 @@ test('time-accounting e2e: live tasklist -> close round-trip against the residen
   // sum to 5 * 30_000 = 150_000 ms = 2.5 minutes; that is the receipt the round-trip must
   // surface, not anything the test derives locally. Timestamps are anchored 1 second *after*
   // the run's created_at so the close-time `since` filter still includes them.
-  const sessionId = 'sentinel-e2e-session';
-  const taskId = 'sentinel-e2e-task';
+  const sessionId = 'forge-e2e-session';
+  const taskId = 'forge-e2e-task';
   const perCallMs = 30_000;
   const eventCount = 5;
-  // Sentinel run is created before the events so its created_at is older than the event
+  // Forge run is created before the events so its created_at is older than the event
   // timestamps and the close() `since` filter does not exclude them.
-  const sentinelRoot = mkdtempSync(join(tmpdir(), 'sentinel-store-'));
+  const forgeRoot = mkdtempSync(join(tmpdir(), 'forge-store-'));
   t.after(() => {
-    try { rmSync(sentinelRoot, { recursive: true, force: true }); } catch { /* best effort */ }
+    try { rmSync(forgeRoot, { recursive: true, force: true }); } catch { /* best effort */ }
   });
-  const store = createStore(sentinelRoot);
-  const core = new SentinelCore({
+  const store = createStore(forgeRoot);
+  const core = new ForgeCore({
     projectRoot: REPO_ROOT,
-    storeRoot: sentinelRoot,
+    storeRoot: forgeRoot,
     store,
     authority: 'host',
     runtimeConfigPath: runtimeConfigPath,
@@ -264,7 +264,7 @@ test('time-accounting e2e: live tasklist -> close round-trip against the residen
   await ingestEvents(port, token, installationId, sessionId, taskId, Array(eventCount).fill(perCallMs), eventTimestamp);
 
   // Debug: probe the route directly to confirm the service returns the expected rows.
-  const probe = await postJson(port, token, '/v1/telemetry/observable-events:query-sentinel-time', {
+  const probe = await postJson(port, token, '/v1/telemetry/observable-events:query-forge-time', {
     sessionId,
     limit: 100,
   });
@@ -287,8 +287,8 @@ test('time-accounting e2e: live tasklist -> close round-trip against the residen
       {
         kind: 'repo',
         excerpt: 'actualActiveMinutes',
-        uri: `file://${join(REPO_ROOT, 'sentinel/lib/time-accounting.js')}`,
-        locator: join(REPO_ROOT, 'sentinel/lib/time-accounting.js'),
+        uri: `file://${join(REPO_ROOT, 'forge/lib/time-accounting.js')}`,
+        locator: join(REPO_ROOT, 'forge/lib/time-accounting.js'),
         criterion_id: 'time-variance-receipt-correct',
         authority: 'host',
         receipt: JSON.stringify({ exit_status: 0 }),
@@ -296,8 +296,8 @@ test('time-accounting e2e: live tasklist -> close round-trip against the residen
       {
         kind: 'observation',
         excerpt: 'actualActiveMinutes',
-        uri: `file://${join(REPO_ROOT, 'sentinel/lib/time-accounting.js')}`,
-        locator: join(REPO_ROOT, 'sentinel/lib/time-accounting.js'),
+        uri: `file://${join(REPO_ROOT, 'forge/lib/time-accounting.js')}`,
+        locator: join(REPO_ROOT, 'forge/lib/time-accounting.js'),
         criterion_id: 'time-variance-receipt-correct',
         authority: 'host',
         receipt: JSON.stringify({ exit_status: 0 }),
@@ -348,7 +348,7 @@ test('time-accounting e2e: planned budget slightly over actuals does not record 
   // planned budget of 1 minute. Variance = -16.67% -> overquote, still beyond the 10%
   // threshold so .miss must be true. This second case exists so the test cannot pass by
   // silently ignoring the threshold; the assertion is exercised on both sides.
-  const workspaceRoot = mkdtempSync(join(tmpdir(), 'sentinel-e2e-'));
+  const workspaceRoot = mkdtempSync(join(tmpdir(), 'forge-e2e-'));
   const port = pickFreePort();
 
   mkdirSync(join(workspaceRoot, 'tools/bin'), { recursive: true });
@@ -393,18 +393,18 @@ test('time-accounting e2e: planned budget slightly over actuals does not record 
     readFileSync(join(workspaceRoot, 'tools/.cache/memory/installation.json'), 'utf8'),
   ).installation_id;
 
-  const sessionId = 'sentinel-e2e-session-overquote';
-  const taskId = 'sentinel-e2e-task-overquote';
-  // Sentinel run is created BEFORE the events so its created_at is older than the event
+  const sessionId = 'forge-e2e-session-overquote';
+  const taskId = 'forge-e2e-task-overquote';
+  // Forge run is created BEFORE the events so its created_at is older than the event
   // timestamps and the close-time `since` filter does not exclude them.
-  const sentinelRoot = mkdtempSync(join(tmpdir(), 'sentinel-store-'));
+  const forgeRoot = mkdtempSync(join(tmpdir(), 'forge-store-'));
   t.after(() => {
-    try { rmSync(sentinelRoot, { recursive: true, force: true }); } catch { /* best effort */ }
+    try { rmSync(forgeRoot, { recursive: true, force: true }); } catch { /* best effort */ }
   });
-  const core = new SentinelCore({
+  const core = new ForgeCore({
     projectRoot: REPO_ROOT,
-    storeRoot: sentinelRoot,
-    store: createStore(sentinelRoot),
+    storeRoot: forgeRoot,
+    store: createStore(forgeRoot),
     authority: 'host',
     runtimeConfigPath: join(workspaceRoot, 'tools/lib/memory/runtime.json'),
   });
@@ -428,8 +428,8 @@ test('time-accounting e2e: planned budget slightly over actuals does not record 
       {
         kind: 'repo',
         excerpt: 'actualActiveMinutes',
-        uri: `file://${join(REPO_ROOT, 'sentinel/lib/time-accounting.js')}`,
-        locator: join(REPO_ROOT, 'sentinel/lib/time-accounting.js'),
+        uri: `file://${join(REPO_ROOT, 'forge/lib/time-accounting.js')}`,
+        locator: join(REPO_ROOT, 'forge/lib/time-accounting.js'),
         criterion_id: 'overquote-receipt-symmetric',
         authority: 'host',
         receipt: JSON.stringify({ exit_status: 0 }),
@@ -437,8 +437,8 @@ test('time-accounting e2e: planned budget slightly over actuals does not record 
       {
         kind: 'observation',
         excerpt: 'actualActiveMinutes',
-        uri: `file://${join(REPO_ROOT, 'sentinel/lib/time-accounting.js')}`,
-        locator: join(REPO_ROOT, 'sentinel/lib/time-accounting.js'),
+        uri: `file://${join(REPO_ROOT, 'forge/lib/time-accounting.js')}`,
+        locator: join(REPO_ROOT, 'forge/lib/time-accounting.js'),
         criterion_id: 'overquote-receipt-symmetric',
         authority: 'host',
         receipt: JSON.stringify({ exit_status: 0 }),

@@ -3,7 +3,7 @@
 ## 2.0.1 (unreleased)
 
 ### P0 (prior)
-- Trust boundary: host token file replaces `SENTINEL_TRUSTED_CALLER`; default store moves to host data directory with legacy `.sentinel/` fallback (`docs/store-migration.md`).
+- Trust boundary: host token file replaces `FORGE_TRUSTED_CALLER`; default store moves to host data directory with legacy `.forge/` fallback (`docs/store-migration.md`).
 - Enforcement: unbound validation paths return `enforcement_degraded`; PostToolUse no longer auto-records passing checks.
 - Gating: `evaluateGate` uses rubric criteria; checks require criterion link + CheckSpec match; supported claims require matching evidence class.
 
@@ -18,10 +18,10 @@
 ### P2
 - Minimal `execution_contract.check_specs` merged into criterion CheckSpec matching; optional `preflight` is a tiny stub (no process-tree watchdog).
 - Blueprint orientation evidence acceptance + hook-point doc (`docs/blueprint-orientation.md`).
-- Rename surfaces: `BeaconCore` (`ReflectCore` alias), `beacon`/`sentinel` bins + MCP tools, `BEACON_*`/`SENTINEL_*` env dual-alias, Codex hooks prefer `CODEX_PLUGIN_ROOT`, `init`/`doctor`, e2e lifecycle coverage.
+- Rename surfaces: `BeaconCore` (`ReflectCore` alias), `beacon`/`forge` bins + MCP tools, `BEACON_*`/`FORGE_*` env dual-alias, Codex hooks prefer `CODEX_PLUGIN_ROOT`, `init`/`doctor`, e2e lifecycle coverage.
 
 ## 2.0.0
 
 - Added hooks-first enforcement, durable local state, claims/evidence, verification gates, CLI, and
   exact-version installed-source documentation lookup.
-- Replaced the v1 MCP surface with `sentinel` and `docs`; legacy aliases are migration errors.
+- Replaced the v1 MCP surface with `forge` and `docs`; legacy aliases are migration errors.

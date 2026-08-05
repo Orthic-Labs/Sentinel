@@ -9,14 +9,14 @@ const { resolveHostDataDir, envFirst } = require('../../lib/host');
 const { buildRetryFingerprint } = require('../../lib/budget');
 const lockedDomain = require('../../lib/locked-domain');
 // Plan 2.6: decision-point routing for discovery tool calls. The logic lives in
-// Membrane's CJS module (single source of truth); the Sentinel PreToolUse hook
+// Membrane's CJS module (single source of truth); the Forge PreToolUse hook
 // wires it into the live host path so a broad discovery grep gets a
 // membrane_context suggestion at the moment the agent is about to search,
 // rather than only as a passive session-start instruction.
 let decisionPoints = null;
 function loadDecisionPoints(root) {
   if (decisionPoints) return decisionPoints;
-  // Resolve the membrane submodule relative to the sentinel repo.
+  // Resolve the membrane submodule relative to the forge repo.
   const candidates = [
     path.join(root, '..', 'membrane', 'mcp', 'decision-points-lib.cjs'),
     path.resolve(__dirname, '..', '..', '..', 'membrane', 'mcp', 'decision-points-lib.cjs'),
@@ -36,7 +36,7 @@ function main() {
   if (result.action === 'block') process.exitCode = 1;
 }
 
-function evaluate(event, { root = envFirst('SENTINEL_ROOT') ?? path.resolve(__dirname, '../..'), projectRoot = process.cwd() } = {}) {
+function evaluate(event, { root = envFirst('FORGE_ROOT') ?? path.resolve(__dirname, '../..'), projectRoot = process.cwd() } = {}) {
   const cli = path.join(root, 'cli.js');
   const name = event.hook_event_name ?? event.event ?? event.type ?? '';
   let runId = event.run_id ?? event.runId;
@@ -45,7 +45,7 @@ function evaluate(event, { root = envFirst('SENTINEL_ROOT') ?? path.resolve(__di
   const taskId = event.task_id ?? event.taskId ?? null;
   const workspaceHash = event.workspace_hash ?? event.workspaceHash ?? null;
   // Arm on evidence, before any branch can return: a locked path reached by ANY event in the
-  // session makes Sentinel mandatory for the rest of it, including the closing turn.
+  // session makes Forge mandatory for the rest of it, including the closing turn.
   let armedDomains = [];
   try {
     armedDomains = lockedDomain.observe(event, sessionId, projectRoot);
@@ -71,13 +71,13 @@ function evaluate(event, { root = envFirst('SENTINEL_ROOT') ?? path.resolve(__di
 
   if (!runId && (name === 'PreToolUse' || name === 'pre_tool_use')) {
     const command = String(event.command ?? event.tool_input?.command ?? '');
-    if (isRisky(command)) return { action: 'block', reason: 'high-risk command requires Sentinel assess before execution' };
-    // Plan 2.6: even without an active Sentinel run, a broad discovery tool
+    if (isRisky(command)) return { action: 'block', reason: 'high-risk command requires Forge assess before execution' };
+    // Plan 2.6: even without an active Forge run, a broad discovery tool
     // call gets a non-blocking membrane_context suggestion. The agent may
     // still proceed — this never blocks, it only advises at the decision point.
     const suggestion = discoverySuggestion(event, root);
-    if (suggestion) return { action: 'noop', reason: 'routine tool use without active sentinel run', suggestion };
-    return { action: 'noop', reason: 'routine tool use without active sentinel run' };
+    if (suggestion) return { action: 'noop', reason: 'routine tool use without active forge run', suggestion };
+    return { action: 'noop', reason: 'routine tool use without active forge run' };
   }
 
   const validationEvents = ['Stop', 'stop', 'PostToolUse', 'post_tool_use', 'PostToolUseFailure', 'post_tool_use_failure'];
@@ -90,16 +90,16 @@ function evaluate(event, { root = envFirst('SENTINEL_ROOT') ?? path.resolve(__di
       return { action: 'noop', reason: 'conversational_stop' };
     }
     // The locked-domain case is the one this trigger exists for: the session touched a locked path
-    // and is now trying to conclude with NO Sentinel run at all. Blocking here is what forces the
+    // and is now trying to conclude with NO Forge run at all. Blocking here is what forces the
     // claim to be recorded and evidenced instead of asserted in a closing sentence.
     if ((name === 'Stop' || name === 'stop') && armedDomains.length > 0 && isCompletionIntent(event)) {
       return {
         action: 'block',
-        reason: 'locked domain requires an active Sentinel run before completion',
+        reason: 'locked domain requires an active Forge run before completion',
         locked_domains: armedDomains,
       };
     }
-    return degraded('no active sentinel run');
+    return degraded('no active forge run');
   }
 
   const isFailureEvent = name === 'PostToolUseFailure' || name === 'post_tool_use_failure'
@@ -185,7 +185,7 @@ function isCompletionIntent(event) {
 }
 
 function invoke(cli, command, input, projectRoot = process.cwd()) {
-  const hostDataDir = envFirst('SENTINEL_HOST_DATA') ?? resolveHostDataDir();
+  const hostDataDir = envFirst('FORGE_HOST_DATA') ?? resolveHostDataDir();
   const child = spawnSync(process.execPath, [cli, command, '--json'], {
     input: JSON.stringify(input),
     encoding: 'utf8',
@@ -193,11 +193,11 @@ function invoke(cli, command, input, projectRoot = process.cwd()) {
     cwd: projectRoot,
     env: {
       ...process.env,
-      SENTINEL_HOST_DATA: hostDataDir,
+      FORGE_HOST_DATA: hostDataDir,
     },
   });
   if (child.error) return { decision: 'blocked', error: child.error.message };
-  try { return JSON.parse(child.stdout); } catch { return { decision: 'blocked', error: child.stderr || 'sentinel-cli returned invalid JSON' }; }
+  try { return JSON.parse(child.stdout); } catch { return { decision: 'blocked', error: child.stderr || 'forge-cli returned invalid JSON' }; }
 }
 
 function degraded(reason) {

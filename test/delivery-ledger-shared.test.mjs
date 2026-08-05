@@ -1,4 +1,4 @@
-// Plan 2.3: the sentinel hook's delivery ledger must be instanceof the shared
+// Plan 2.3: the forge hook's delivery ledger must be instanceof the shared
 // ContextSessionV1 class from the Membrane CJS lib. This proves one
 // implementation — no local Map or class mirror remains.
 
@@ -11,7 +11,7 @@ const require = createRequire(import.meta.url);
 const adapter = require("../hooks/membrane-context.js");
 const rendererLib = require("../../membrane/mcp/context-renderer-lib.cjs");
 
-test("sentinel render uses ContextSessionV1 from the shared CJS lib", () => {
+test("forge render uses ContextSessionV1 from the shared CJS lib", () => {
   // The module exports render() which internally creates a ContextSessionV1.
   // We can't easily get the instance out of render(), but we can verify the
   // class is available and the hook's __resetDeliveryLedger is a function
@@ -19,7 +19,7 @@ test("sentinel render uses ContextSessionV1 from the shared CJS lib", () => {
   assert.equal(typeof adapter.__resetDeliveryLedger, "function");
   assert.equal(typeof adapter.render, "function");
 
-  // The CJS lib exports ContextSessionV1 — the sentinel hook must use it.
+  // The CJS lib exports ContextSessionV1 — the forge hook must use it.
   assert.equal(typeof rendererLib.ContextSessionV1, "function");
   assert.equal(typeof rendererLib.applyDeliveryLedger, "function");
 

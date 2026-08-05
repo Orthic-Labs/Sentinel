@@ -1,10 +1,10 @@
 {
   "hooks": {
-    "SessionStart": [{ "hooks": [{ "type": "command", "command": "SENTINEL_HOST=claude-code node \"${CLAUDE_PROJECT_DIR}/hooks/dispatcher.js\"" }] }],
-    "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "SENTINEL_HOST=claude-code node \"${CLAUDE_PROJECT_DIR}/hooks/dispatcher.js\"" }] }],
-    "PreToolUse": [{ "matcher": "Bash|Shell", "hooks": [{ "type": "command", "command": "SENTINEL_HOST=claude-code node \"${CLAUDE_PROJECT_DIR}/hooks/dispatcher.js\"" }] }],
-    "PostToolUse": [{ "hooks": [{ "type": "command", "command": "SENTINEL_HOST=claude-code node \"${CLAUDE_PROJECT_DIR}/hooks/dispatcher.js\"" }] }],
-    "PostToolUseFailure": [{ "hooks": [{ "type": "command", "command": "SENTINEL_HOST=claude-code node \"${CLAUDE_PROJECT_DIR}/hooks/dispatcher.js\"" }] }],
-    "Stop": [{ "hooks": [{ "type": "command", "command": "SENTINEL_HOST=claude-code node \"${CLAUDE_PROJECT_DIR}/hooks/dispatcher.js\"" }] }]
+    "SessionStart": [{ "hooks": [{ "type": "command", "command": "FORGE_HOST=claude-code node \"${CLAUDE_PROJECT_DIR}/hooks/dispatcher.js\"" }] }],
+    "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "FORGE_HOST=claude-code node \"${CLAUDE_PROJECT_DIR}/hooks/dispatcher.js\"" }] }],
+    "PreToolUse": [{ "matcher": "Bash|Shell", "hooks": [{ "type": "command", "command": "FORGE_HOST=claude-code node \"${CLAUDE_PROJECT_DIR}/hooks/dispatcher.js\"" }] }],
+    "PostToolUse": [{ "hooks": [{ "type": "command", "command": "FORGE_HOST=claude-code node \"${CLAUDE_PROJECT_DIR}/hooks/dispatcher.js\"" }] }],
+    "PostToolUseFailure": [{ "hooks": [{ "type": "command", "command": "FORGE_HOST=claude-code node \"${CLAUDE_PROJECT_DIR}/hooks/dispatcher.js\"" }] }],
+    "Stop": [{ "hooks": [{ "type": "command", "command": "FORGE_HOST=claude-code node \"${CLAUDE_PROJECT_DIR}/hooks/dispatcher.js\"" }] }]
   }
 }

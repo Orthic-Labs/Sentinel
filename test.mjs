@@ -99,8 +99,8 @@ const child = spawn(process.execPath, [join(directory, 'server.js')], {
     CONTEXT7_MAX_RESPONSE_CHARS: '1200',
     CONTEXT7_MAX_BODY_BYTES: '20000',
     CONTEXT7_TIMEOUT_MS: '100',
-    SENTINEL_TELEMETRY_PATH: telemetryPath,
-    SENTINEL_LEGACY_TOOLS: '1',
+    FORGE_TELEMETRY_PATH: telemetryPath,
+    FORGE_LEGACY_TOOLS: '1',
   },
   stdio: ['pipe', 'pipe', 'pipe'],
   windowsHide: true,
@@ -177,7 +177,7 @@ try {
     capabilities: {},
     clientInfo: { name: 'reflect-test', version: '1.0.0' },
   });
-  assert.equal(initialized.result.serverInfo.name, 'sentinel');
+  assert.equal(initialized.result.serverInfo.name, 'forge');
   assert.equal(initialized.result.protocolVersion, '2025-11-25');
   assert.match(initialized.result.instructions, /Automatically call sequentialthinking before/);
   assert.match(initialized.result.instructions, /retrieve context before continuing/);
@@ -415,7 +415,7 @@ try {
   while (Date.now() < telemetryDeadline) {
     telemetryRows = readTelemetry(telemetryPath);
     const outcomes = new Set(telemetryRows
-      .filter((row) => row.event === 'sentinel.tool_completed')
+      .filter((row) => row.event === 'forge.tool_completed')
       .map((row) => `${row.outcome}:${row.reason ?? ''}`));
     if (outcomes.has('delivered:')
       && outcomes.has('failed:invalid_arguments')
@@ -426,10 +426,10 @@ try {
     }
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
-  assert.ok(telemetryRows.some((row) => row.event === 'sentinel.process_started'));
-  assert.ok(telemetryRows.some((row) => row.event === 'sentinel.tool_called'
+  assert.ok(telemetryRows.some((row) => row.event === 'forge.process_started'));
+  assert.ok(telemetryRows.some((row) => row.event === 'forge.tool_called'
     && row.tool === 'sequentialthinking'));
-  assert.ok(telemetryRows.some((row) => row.event === 'sentinel.tool_completed'
+  assert.ok(telemetryRows.some((row) => row.event === 'forge.tool_completed'
     && row.tool === 'sequentialthinking'
     && row.outcome === 'delivered'
     && row.delivery_state === 'stdio_flushed'));
@@ -439,7 +439,7 @@ try {
     ['failed', 'timeout'],
     ['cancelled', 'cancelled_by_client'],
   ]) {
-    assert.ok(telemetryRows.some((row) => row.event === 'sentinel.tool_completed'
+    assert.ok(telemetryRows.some((row) => row.event === 'forge.tool_completed'
       && row.outcome === outcome && row.reason === reason));
   }
   for (const row of telemetryRows) {
@@ -456,7 +456,7 @@ try {
   }
 
   const limitedChild = spawn(process.execPath, [join(directory, 'server.js')], {
-    env: { ...process.env, SENTINEL_MAX_LINE_CHARS: '100', SENTINEL_TELEMETRY_ENABLED: '0', SENTINEL_LEGACY_TOOLS: '1' },
+    env: { ...process.env, FORGE_MAX_LINE_CHARS: '100', FORGE_TELEMETRY_ENABLED: '0', FORGE_LEGACY_TOOLS: '1' },
     stdio: ['pipe', 'pipe', 'pipe'],
     windowsHide: true,
   });
@@ -475,7 +475,7 @@ try {
   limitedChild.kill();
 
   const teardownChild = spawn(process.execPath, [join(directory, 'server.js')], {
-    env: { ...process.env, SENTINEL_TELEMETRY_PATH: teardownTelemetryPath, SENTINEL_LEGACY_TOOLS: '1' },
+    env: { ...process.env, FORGE_TELEMETRY_PATH: teardownTelemetryPath, FORGE_LEGACY_TOOLS: '1' },
     stdio: ['pipe', 'pipe', 'pipe'],
     windowsHide: true,
   });
@@ -511,8 +511,8 @@ try {
   assert.deepEqual(teardownOutcome, { code: 0 });
   assert.equal(teardownStderr, '');
   const teardownTelemetry = readTelemetry(teardownTelemetryPath);
-  assert.ok(teardownTelemetry.some((row) => row.event === 'sentinel.process_started'));
-  assert.ok(teardownTelemetry.some((row) => row.event === 'sentinel.process_stopped'
+  assert.ok(teardownTelemetry.some((row) => row.event === 'forge.process_started'));
+  assert.ok(teardownTelemetry.some((row) => row.event === 'forge.process_stopped'
     && row.reason === 'transport_closed' && row.exit_code === 0));
 
   const boundedTelemetryPath = join(telemetryDirectory, 'bounded.jsonl');
@@ -520,9 +520,9 @@ try {
   const boundedChild = spawn(process.execPath, [join(directory, 'server.js')], {
     env: {
       ...process.env,
-      SENTINEL_TELEMETRY_PATH: boundedTelemetryPath,
-      SENTINEL_TELEMETRY_MAX_BYTES: '1500',
-      SENTINEL_LEGACY_TOOLS: '1',
+      FORGE_TELEMETRY_PATH: boundedTelemetryPath,
+      FORGE_TELEMETRY_MAX_BYTES: '1500',
+      FORGE_LEGACY_TOOLS: '1',
     },
     stdio: ['pipe', 'pipe', 'pipe'],
     windowsHide: true,
@@ -586,7 +586,7 @@ try {
     require(${JSON.stringify(join(directory, 'server.js'))});
   `;
   const backpressureChild = spawn(process.execPath, ['-e', backpressurePreload], {
-    env: { ...process.env, SENTINEL_TELEMETRY_ENABLED: '0', SENTINEL_LEGACY_TOOLS: '1' },
+    env: { ...process.env, FORGE_TELEMETRY_ENABLED: '0', FORGE_LEGACY_TOOLS: '1' },
     stdio: ['pipe', 'pipe', 'pipe'],
     windowsHide: true,
   });
@@ -629,8 +629,8 @@ try {
       ...process.env,
       CONTEXT7_API_BASE_URL: `http://127.0.0.1:${address.port}/api/v2`,
       CONTEXT7_MAX_CONCURRENT_REQUESTS: '1',
-      SENTINEL_TELEMETRY_ENABLED: '0',
-      SENTINEL_LEGACY_TOOLS: '1',
+      FORGE_TELEMETRY_ENABLED: '0',
+      FORGE_LEGACY_TOOLS: '1',
     },
     stdio: ['pipe', 'pipe', 'pipe'],
     windowsHide: true,
@@ -706,13 +706,13 @@ try {
   }
 
   const invalidEnvironment = spawnSync(process.execPath, [join(directory, 'server.js')], {
-    env: { ...process.env, SENTINEL_MAX_THOUGHTS: '500oops', SENTINEL_TELEMETRY_ENABLED: '0' },
+    env: { ...process.env, FORGE_MAX_THOUGHTS: '500oops', FORGE_TELEMETRY_ENABLED: '0' },
     encoding: 'utf8',
     windowsHide: true,
   });
   assert.notEqual(invalidEnvironment.status, 0);
   assert.match(invalidEnvironment.stderr, /positive integers/);
-  process.stdout.write('sentinel tests passed\n');
+  process.stdout.write('forge tests passed\n');
 } finally {
   lines.close();
   child.stdin.end();

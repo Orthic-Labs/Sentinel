@@ -4,7 +4,7 @@
 |---|---|---|
 | Claude Code | `hooks/claude-code/settings.json` | PostToolUseFailure, PreToolUse risk matcher, Stop gate |
 | Codex | `hooks/codex/README.md` | Translate current host events to neutral JSON |
-| Generic MCP host | `server.js` | `sentinel` and `docs` tools |
+| Generic MCP host | `server.js` | `forge` and `docs` tools |
 | CI | `cli.js` | `verify --gate signoff` exit code |
 
 The host adapter owns event-field translation. The shared hook owns policy and does not execute

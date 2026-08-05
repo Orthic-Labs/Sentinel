@@ -16,10 +16,10 @@ function handlersFor(eventName, host) {
 }
 
 function dispatch(event = {}, options = {}) {
-  const host = options.host ?? process.env.SENTINEL_HOST ?? 'claude-code';
+  const host = options.host ?? process.env.FORGE_HOST ?? 'claude-code';
   const eventName = event.hook_event_name ?? event.event ?? event.type ?? '';
-  const handlerBudgetMs = options.handlerBudgetMs ?? (Number(process.env.SENTINEL_HANDLER_BUDGET_MS) || DEFAULT_HANDLER_BUDGET_MS);
-  const totalBudgetMs = options.totalBudgetMs ?? (Number(process.env.SENTINEL_TOTAL_BUDGET_MS) || DEFAULT_TOTAL_BUDGET_MS);
+  const handlerBudgetMs = options.handlerBudgetMs ?? (Number(process.env.FORGE_HANDLER_BUDGET_MS) || DEFAULT_HANDLER_BUDGET_MS);
+  const totalBudgetMs = options.totalBudgetMs ?? (Number(process.env.FORGE_TOTAL_BUDGET_MS) || DEFAULT_TOTAL_BUDGET_MS);
   const started = Date.now();
   const records = [];
   const outputs = [];
@@ -56,7 +56,7 @@ function main() {
   if (blocking) process.stdout.write(`${JSON.stringify(blocking)}\n`);
   else {
     const contexts = payloads.map((value) => value?.hookSpecificOutput?.additionalContext).filter(Boolean);
-    contexts.push(`Sentinel dispatcher: ${JSON.stringify({ handlers: result.handlers, total_latency_ms: result.total_latency_ms })}`);
+    contexts.push(`Forge dispatcher: ${JSON.stringify({ handlers: result.handlers, total_latency_ms: result.total_latency_ms })}`);
     process.stdout.write(`${JSON.stringify({ hookSpecificOutput: { hookEventName: result.event, additionalContext: contexts.join('\n') } })}\n`);
   }
 }

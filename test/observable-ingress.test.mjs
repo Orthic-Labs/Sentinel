@@ -10,7 +10,7 @@ const require = createRequire(import.meta.url);
 const { buildObservableEvent } = require('../hooks/observable-event.js');
 
 test('observable ingress fsyncs one Membrane-owned content-free record', () => {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'sentinel-ingress-'));
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'forge-ingress-'));
   const target = path.join(directory, 'events.jsonl');
   const previous = process.env.CRYPT_TELEMETRY_INGRESS;
   process.env.CRYPT_TELEMETRY_INGRESS = target;

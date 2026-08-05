@@ -1,7 +1,7 @@
 {
-  "name": "sentinel",
+  "name": "forge",
   "version": "0.2.1",
-  "description": "Sentinel deterministic evidence gates for Codex tool use and signoff. Prefer CODEX_PLUGIN_ROOT; CLAUDE_PLUGIN_ROOT remains a fallback.",
+  "description": "Forge deterministic evidence gates for Codex tool use and signoff. Prefer CODEX_PLUGIN_ROOT; CLAUDE_PLUGIN_ROOT remains a fallback.",
   "author": { "name": "Orthic Labs" },
   "license": "MIT",
   "hooks": "./hooks/codex/hooks.json"

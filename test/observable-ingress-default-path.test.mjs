@@ -49,7 +49,7 @@ test('the real workspace runtime.json resolves the crypt-local-v1 identity (path
 
 test('default path is used (and honored) when CRYPT_TELEMETRY_INGRESS is unset and the resolved db file exists', () => {
   withEnv({ CRYPT_TELEMETRY_INGRESS: undefined }, () => {
-    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'sentinel-default-ingress-'));
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'forge-default-ingress-'));
     const dbPath = path.join(directory, 'crypt-engine.db');
     fs.writeFileSync(dbPath, ''); // simulate: the resident service has initialized its db
     withEnv({ CRYPT_DB: dbPath }, () => {
@@ -66,7 +66,7 @@ test('default path is used (and honored) when CRYPT_TELEMETRY_INGRESS is unset a
 
 test('resolved-but-service-not-running reports a distinct honest reason, never a false persisted', () => {
   withEnv({ CRYPT_TELEMETRY_INGRESS: undefined }, () => {
-    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'sentinel-no-db-'));
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'forge-no-db-'));
     const dbPath = path.join(directory, 'crypt-engine.db'); // deliberately never created
     withEnv({ CRYPT_DB: dbPath }, () => {
       const result = appendObservableEvent(sampleEvent({ traceId: 'trace-no-service' }));
@@ -78,7 +78,7 @@ test('resolved-but-service-not-running reports a distinct honest reason, never a
 });
 
 test('explicit CRYPT_TELEMETRY_INGRESS still overrides the default path, bypassing the drain-evidence gate', () => {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'sentinel-explicit-override-'));
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'forge-explicit-override-'));
   const target = path.join(directory, 'events.jsonl');
   const missingDbPath = path.join(directory, 'never-created.db'); // proves override needs no drain evidence
   withEnv({ CRYPT_TELEMETRY_INGRESS: target, CRYPT_DB: missingDbPath }, () => {
@@ -91,12 +91,12 @@ test('explicit CRYPT_TELEMETRY_INGRESS still overrides the default path, bypassi
 });
 
 test('unresolvable config (missing file) returns ok:false, never throws to the caller', () => {
-  const missing = path.join(os.tmpdir(), 'sentinel-does-not-exist', 'runtime.json');
+  const missing = path.join(os.tmpdir(), 'forge-does-not-exist', 'runtime.json');
   assert.deepEqual(resolveDefaultIngressTarget(missing), { ok: false });
 });
 
 test('unresolvable config (malformed JSON) returns ok:false', () => {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'sentinel-bad-json-'));
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'forge-bad-json-'));
   const configPath = path.join(directory, 'runtime.json');
   fs.writeFileSync(configPath, '{ not valid json');
   assert.deepEqual(resolveDefaultIngressTarget(configPath), { ok: false });
@@ -104,7 +104,7 @@ test('unresolvable config (malformed JSON) returns ok:false', () => {
 });
 
 test('unresolvable config (wrong serviceId / schemaVersion / host identity) returns ok:false for each mismatch', () => {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'sentinel-bad-identity-'));
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'forge-bad-identity-'));
   const cases = [
     { schemaVersion: 1, serviceId: 'not-crypt-local-v1', host: '127.0.0.1', port: 47851 },
     { schemaVersion: 2, serviceId: 'crypt-local-v1', host: '127.0.0.1', port: 47851 },

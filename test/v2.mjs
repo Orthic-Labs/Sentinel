@@ -4,23 +4,23 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { SentinelCore, parseLocator } from '../lib/core.js';
+import { ForgeCore, parseLocator } from '../lib/core.js';
 import { createStore } from '../lib/store.js';
 import { resolveDocs } from '../lib/docs.js';
 import { doctor, projectStoreKey } from '../lib/host.js';
 import { checkMatchesSpec } from '../lib/verify.js';
 import { buildRetryFingerprint } from '../lib/budget.js';
 
-const hostDataDir = mkdtempSync(join(tmpdir(), 'sentinel-host-'));
+const hostDataDir = mkdtempSync(join(tmpdir(), 'forge-host-'));
 function hookEnv(extra = {}) {
   return {
     ...process.env,
-    SENTINEL_HOST_DATA: hostDataDir,
+    FORGE_HOST_DATA: hostDataDir,
     ...extra,
   };
 }
 
-const root = mkdtempSync(join(tmpdir(), 'sentinel-v2-'));
+const root = mkdtempSync(join(tmpdir(), 'forge-v2-'));
 const project = join(root, 'project');
 mkdirSync(join(project, 'node_modules', 'demo-lib'), { recursive: true });
 writeFileSync(join(project, 'package.json'), JSON.stringify({ dependencies: { 'demo-lib': '1.2.3' }}));
@@ -29,7 +29,7 @@ writeFileSync(join(project, 'node_modules', 'demo-lib', 'package.json'), JSON.st
 writeFileSync(join(project, 'node_modules', 'demo-lib', 'README.md'), '# Client\nUse configure client middleware.\n');
 
 const store = createStore(join(hostDataDir, 'stores', projectStoreKey(project)));
-const core = new SentinelCore({ projectRoot: project, store });
+const core = new ForgeCore({ projectRoot: project, store });
 assert.throws(
   () => core.assess({ run_id: 'invalid-claim-run', summary: 'Reject malformed claim', claims: ['not-an-object'] }),
   /claim must be an object/,
@@ -45,19 +45,19 @@ const mcpSchema = spawnSync(process.execPath, [join(fileURLToPath(new URL('..', 
 });
 assert.equal(mcpSchema.status, 0, mcpSchema.stderr);
 const mcpResponses = mcpSchema.stdout.trim().split('\n').map((line) => JSON.parse(line));
-const sentinelSchema = mcpResponses.find((response) => response.id === 2).result.tools.find((tool) => tool.name === 'sentinel').inputSchema;
-assert.equal(sentinelSchema.properties.claims.items.type, 'object');
-assert.equal(sentinelSchema.properties.evidence.items.type, 'object');
-assert.equal(sentinelSchema.properties.checks.items.type, 'object');
-assert.equal(sentinelSchema.properties.evidence.items.properties.trust_class, undefined);
-assert.equal(sentinelSchema.properties.checks.items.properties.executor, undefined);
-assert.equal(sentinelSchema.properties.checks.items.properties.status, undefined);
-assert.deepEqual(sentinelSchema.allOf[0].then.required, ['summary']);
-assert.deepEqual(sentinelSchema.allOf[0].else.required, ['run_id']);
+const forgeSchema = mcpResponses.find((response) => response.id === 2).result.tools.find((tool) => tool.name === 'forge').inputSchema;
+assert.equal(forgeSchema.properties.claims.items.type, 'object');
+assert.equal(forgeSchema.properties.evidence.items.type, 'object');
+assert.equal(forgeSchema.properties.checks.items.type, 'object');
+assert.equal(forgeSchema.properties.evidence.items.properties.trust_class, undefined);
+assert.equal(forgeSchema.properties.checks.items.properties.executor, undefined);
+assert.equal(forgeSchema.properties.checks.items.properties.status, undefined);
+assert.deepEqual(forgeSchema.allOf[0].then.required, ['summary']);
+assert.deepEqual(forgeSchema.allOf[0].else.required, ['run_id']);
 
 const unassessedRiskHook = spawnSync(process.execPath, [join(fileURLToPath(new URL('..', import.meta.url)), 'hooks', 'generic', 'hook.js')], {
   cwd: project,
-  env: hookEnv({ SENTINEL_ROOT: fileURLToPath(new URL('..', import.meta.url)) }),
+  env: hookEnv({ FORGE_ROOT: fileURLToPath(new URL('..', import.meta.url)) }),
   input: JSON.stringify({ hook_event_name: 'PreToolUse', session_id: 'unassessed-session', tool_input: { command: 'git push --force origin main' } }),
   encoding: 'utf8',
   windowsHide: true,
@@ -65,11 +65,11 @@ const unassessedRiskHook = spawnSync(process.execPath, [join(fileURLToPath(new U
 assert.equal(unassessedRiskHook.status, 1, unassessedRiskHook.stderr);
 assert.deepEqual(JSON.parse(unassessedRiskHook.stdout), {
   action: 'block',
-  reason: 'high-risk command requires Sentinel assess before execution',
+  reason: 'high-risk command requires Forge assess before execution',
 });
 const unassessedSuccessHook = spawnSync(process.execPath, [join(fileURLToPath(new URL('..', import.meta.url)), 'hooks', 'generic', 'hook.js')], {
   cwd: project,
-  env: hookEnv({ SENTINEL_ROOT: fileURLToPath(new URL('..', import.meta.url)) }),
+  env: hookEnv({ FORGE_ROOT: fileURLToPath(new URL('..', import.meta.url)) }),
   input: JSON.stringify({ hook_event_name: 'PostToolUse', tool_name: 'shell', tool_input: { command: 'node --version' } }),
   encoding: 'utf8',
   windowsHide: true,
@@ -77,12 +77,12 @@ const unassessedSuccessHook = spawnSync(process.execPath, [join(fileURLToPath(ne
 assert.equal(unassessedSuccessHook.status, 0, unassessedSuccessHook.stderr);
 assert.deepEqual(JSON.parse(unassessedSuccessHook.stdout), {
   action: 'enforcement_degraded',
-  reason: 'no active sentinel run',
+  reason: 'no active forge run',
 });
 
 const recursiveAmbiguousStop = spawnSync(process.execPath, [join(fileURLToPath(new URL('..', import.meta.url)), 'hooks', 'generic', 'hook.js')], {
   cwd: project,
-  env: hookEnv({ SENTINEL_ROOT: fileURLToPath(new URL('..', import.meta.url)) }),
+  env: hookEnv({ FORGE_ROOT: fileURLToPath(new URL('..', import.meta.url)) }),
   input: JSON.stringify({ hook_event_name: 'Stop', session_id: 'recursive-session', stop_hook_active: true }),
   encoding: 'utf8',
   windowsHide: true,
@@ -94,7 +94,7 @@ assert.deepEqual(JSON.parse(recursiveAmbiguousStop.stdout), {
 });
 const idleAmbiguousStop = spawnSync(process.execPath, [join(fileURLToPath(new URL('..', import.meta.url)), 'hooks', 'generic', 'hook.js')], {
   cwd: project,
-  env: hookEnv({ SENTINEL_ROOT: fileURLToPath(new URL('..', import.meta.url)) }),
+  env: hookEnv({ FORGE_ROOT: fileURLToPath(new URL('..', import.meta.url)) }),
   input: JSON.stringify({ hook_event_name: 'Stop', session_id: 'idle-session' }),
   encoding: 'utf8',
   windowsHide: true,
@@ -102,11 +102,11 @@ const idleAmbiguousStop = spawnSync(process.execPath, [join(fileURLToPath(new UR
 assert.equal(idleAmbiguousStop.status, 0, idleAmbiguousStop.stderr);
 assert.deepEqual(JSON.parse(idleAmbiguousStop.stdout), {
   action: 'enforcement_degraded',
-  reason: 'no active sentinel run',
+  reason: 'no active forge run',
 });
 const riskyAmbiguousUse = spawnSync(process.execPath, [join(fileURLToPath(new URL('..', import.meta.url)), 'hooks', 'generic', 'hook.js')], {
   cwd: project,
-  env: hookEnv({ SENTINEL_ROOT: fileURLToPath(new URL('..', import.meta.url)) }),
+  env: hookEnv({ FORGE_ROOT: fileURLToPath(new URL('..', import.meta.url)) }),
   input: JSON.stringify({ hook_event_name: 'PreToolUse', session_id: 'risky-session', tool_input: { command: 'git push --force origin main' } }),
   encoding: 'utf8',
   windowsHide: true,
@@ -122,7 +122,7 @@ assert.deepEqual(sessionBinding, { run_id: assessed.run_id, status: 'bound' });
 assert.equal(store.get('session_bindings', 'claude-session-1').run_id, assessed.run_id);
 const enforcedHook = spawnSync(process.execPath, [join(fileURLToPath(new URL('..', import.meta.url)), 'hooks', 'generic', 'hook.js')], {
   cwd: project,
-  env: hookEnv({ SENTINEL_ROOT: fileURLToPath(new URL('..', import.meta.url)) }),
+  env: hookEnv({ FORGE_ROOT: fileURLToPath(new URL('..', import.meta.url)) }),
   input: JSON.stringify({ hook_event_name: 'PreToolUse', session_id: 'claude-session-1', tool_input: { command: 'rm -rf build-output' } }),
   encoding: 'utf8',
   windowsHide: true,
@@ -133,7 +133,7 @@ assert.equal(enforcedHookResult.action, 'block');
 assert.equal(enforcedHookResult.reason, 'high-risk gate unmet');
 const inProcessGenericHook = spawnSync(process.execPath, ['-e', `const { evaluate } = require(${JSON.stringify(join(fileURLToPath(new URL('..', import.meta.url)), 'hooks', 'generic', 'hook.js'))}); process.stdout.write(JSON.stringify(evaluate(${JSON.stringify({ hook_event_name: 'PreToolUse', run_id: assessed.run_id, tool_input: { command: 'rm -rf build-output' } })})));`], {
   cwd: project,
-  env: hookEnv({ SENTINEL_ROOT: fileURLToPath(new URL('..', import.meta.url)) }),
+  env: hookEnv({ FORGE_ROOT: fileURLToPath(new URL('..', import.meta.url)) }),
   encoding: 'utf8',
   windowsHide: true,
 });
@@ -157,7 +157,7 @@ assert.deepEqual(
 );
 const failureHook = spawnSync(process.execPath, [join(fileURLToPath(new URL('..', import.meta.url)), 'hooks', 'generic', 'hook.js')], {
   cwd: project,
-  env: hookEnv({ SENTINEL_ROOT: fileURLToPath(new URL('..', import.meta.url)) }),
+  env: hookEnv({ FORGE_ROOT: fileURLToPath(new URL('..', import.meta.url)) }),
   input: JSON.stringify({ hook_event_name: 'PostToolUse', run_id: assessed.run_id, tool_name: 'shell', error: 'command failed' }),
   encoding: 'utf8',
   windowsHide: true,
@@ -166,7 +166,7 @@ assert.equal(failureHook.status, 0, failureHook.stderr);
 assert.equal(JSON.parse(failureHook.stdout).action, 'continue');
 const successfulHook = spawnSync(process.execPath, [join(fileURLToPath(new URL('..', import.meta.url)), 'hooks', 'generic', 'hook.js')], {
   cwd: project,
-  env: hookEnv({ SENTINEL_ROOT: fileURLToPath(new URL('..', import.meta.url)) }),
+  env: hookEnv({ FORGE_ROOT: fileURLToPath(new URL('..', import.meta.url)) }),
   input: JSON.stringify({
     hook_event_name: 'PostToolUse',
     run_id: assessed.run_id,
@@ -323,7 +323,7 @@ assert.notEqual(secondDocsPage.items[0].locator, firstDocsPage.items[0].locator)
 
 const riskyHook = spawnSync(process.execPath, [join(fileURLToPath(new URL('..', import.meta.url)), 'hooks', 'generic', 'hook.js')], {
   cwd: project,
-  env: hookEnv({ SENTINEL_ROOT: fileURLToPath(new URL('..', import.meta.url)) }),
+  env: hookEnv({ FORGE_ROOT: fileURLToPath(new URL('..', import.meta.url)) }),
   input: JSON.stringify({ hook_event_name: 'PreToolUse', run_id: waiverRun.run_id, tool_input: { command: 'git push -f origin main' } }),
   encoding: 'utf8',
   windowsHide: true,
@@ -420,7 +420,7 @@ assert.match(fpA, /^sha256:/);
 // Conversational Stop ≠ completion
 const convStop = spawnSync(process.execPath, [join(fileURLToPath(new URL('..', import.meta.url)), 'hooks', 'generic', 'hook.js')], {
   cwd: project,
-  env: hookEnv({ SENTINEL_ROOT: fileURLToPath(new URL('..', import.meta.url)) }),
+  env: hookEnv({ FORGE_ROOT: fileURLToPath(new URL('..', import.meta.url)) }),
   input: JSON.stringify({ hook_event_name: 'Stop', session_id: 'claude-session-1' }),
   encoding: 'utf8',
   windowsHide: true,
@@ -484,7 +484,7 @@ assert.ok(emptyRubricClose.gate.deficits.some((row) => row.code === 'empty_signo
 
 // One failed close batch leaves every close row unapplied.
 const atomicStore = createStore(join(root, 'atomic-close-store'));
-const atomicCore = new SentinelCore({ projectRoot: project, store: atomicStore });
+const atomicCore = new ForgeCore({ projectRoot: project, store: atomicStore });
 const atomicRun = atomicCore.assess({
   summary: 'Atomic close',
   task_kind: 'feature',
@@ -530,12 +530,12 @@ assert.equal(incrStore.list('retry_budget').length, 1);
 
 // doctor does not initialize a host token.
 const doctorResult = doctor(project);
-assert.equal(doctorResult.product, 'sentinel');
+assert.equal(doctorResult.product, 'forge');
 assert.equal(doctorResult.ok, true);
 
 // E2E lifecycle: assess → evidence → verify → completion-intent Stop closes
 const e2eStore = store;
-const e2eCore = new SentinelCore({ projectRoot: project, store: e2eStore });
+const e2eCore = new ForgeCore({ projectRoot: project, store: e2eStore });
 const e2e = e2eCore.assess({
   summary: 'E2E lifecycle',
   task_kind: 'feature',
@@ -558,7 +558,7 @@ e2eCore.verify({
 }, 'operator');
 const e2eStop = spawnSync(process.execPath, [join(fileURLToPath(new URL('..', import.meta.url)), 'hooks', 'generic', 'hook.js')], {
   cwd: project,
-  env: hookEnv({ SENTINEL_ROOT: fileURLToPath(new URL('..', import.meta.url)) }),
+  env: hookEnv({ FORGE_ROOT: fileURLToPath(new URL('..', import.meta.url)) }),
   input: JSON.stringify({ hook_event_name: 'Stop', session_id: 'e2e-session', completion_intent: true }),
   encoding: 'utf8',
   windowsHide: true,
@@ -569,4 +569,4 @@ assert.equal(e2eStopResult.action, 'allow');
 assert.equal(e2eStopResult.closed, true);
 assert.equal(e2eStore.get('runs', e2e.run_id).status, 'closed');
 
-console.log('sentinel v2 tests passed');
+console.log('forge v2 tests passed');

@@ -1,8 +1,8 @@
-<img src=".github/banner.svg" alt="Sentinel — Claims need evidence. Checks must pass." width="100%">
+<img src=".github/banner.svg" alt="Forge — Claims need evidence. Checks must pass." width="100%">
 
-**Coding agents can sound certain after reading stale code, guessing an API, or skipping a failed test. Sentinel is the local ledger that makes certainty cost evidence: material claims need source-backed proof, and required checks must pass before work is allowed to close.**
+**Coding agents can sound certain after reading stale code, guessing an API, or skipping a failed test. Forge is the local ledger that makes certainty cost evidence: material claims need source-backed proof, and required checks must pass before work is allowed to close.**
 
-<sub>Public name **Sentinel**. The CLI, env vars, and MCP tool keep the compatibility alias <code>sentinel</code>.</sub>
+<sub>Public name **Forge**. The CLI, env vars, and MCP tool keep the compatibility alias <code>forge</code>.</sub>
 
 ![license](https://img.shields.io/badge/license-source--available-5362d8?style=flat-square&labelColor=111318)
 ![node](https://img.shields.io/badge/node-%E2%89%A520-5362d8?style=flat-square&labelColor=111318)
@@ -10,9 +10,9 @@
 
 ## The problem it removes
 
-An agent that "verified" something by asserting it has verified nothing. Sentinel splits the difference between *stated* and *proven* into data:
+An agent that "verified" something by asserting it has verified nothing. Forge splits the difference between *stated* and *proven* into data:
 
-- A repository claim counts only when Sentinel itself reads the file and hashes its content. A model-supplied excerpt is stored for context, but it never satisfies repository-evidence policy on its own.
+- A repository claim counts only when Forge itself reads the file and hashes its content. A model-supplied excerpt is stored for context, but it never satisfies repository-evidence policy on its own.
 - A check counts only when its `executor` is not `model_claim`. Executable checks outrank self-reported confidence, always.
 - Uncertainty is typed, not stylistic: every claim is `open`, `supported`, `refuted`, `stale`, or `waived` — and a material claim left `open` blocks signoff.
 
@@ -38,7 +38,7 @@ Evidence carries a trust class, ranked. Higher classes beat lower ones; the bott
 | Rank | Trust class |
 |---|---|
 | 1 | Deterministic execution (tests, builds, typed commands) |
-| 2 | Live local state (files Sentinel read and hashed itself) |
+| 2 | Live local state (files Forge read and hashed itself) |
 | 3 | Installed dependency source |
 | 4 | Official versioned documentation |
 | 5 | Primary current source |
@@ -58,7 +58,7 @@ High-risk actions additionally require explicit intent, a blast radius, and a sa
 
 ## Enforcement that survives model amnesia
 
-Sentinel does not rely on the model remembering the protocol. Host adapters translate native events — tool failure, blind identical retry, risky command, signoff attempt, CI boundary — into one neutral decision contract: `allow / continue / block / noop`.
+Forge does not rely on the model remembering the protocol. Host adapters translate native events — tool failure, blind identical retry, risky command, signoff attempt, CI boundary — into one neutral decision contract: `allow / continue / block / noop`.
 
 ```mermaid
 flowchart LR
@@ -67,8 +67,8 @@ flowchart LR
     H1 --> G[generic adapter<br/>neutral decision contract]
     H2 --> G
     G --> CLI[cli.js]
-    MCP[Any MCP host] --> SRV[server.js<br/>sentinel · docs tools]
-    CLI --> CORE[SentinelCore<br/>assess · checkpoint · verify · close]
+    MCP[Any MCP host] --> SRV[server.js<br/>forge · docs tools]
+    CLI --> CORE[ForgeCore<br/>assess · checkpoint · verify · close]
     SRV --> CORE
     CORE --> CL[claims + evidence]
     CORE --> GT[gate evaluation]
@@ -87,7 +87,7 @@ Two details do a lot of work here:
 Local, durable, tamper-evident. Nothing leaves the machine.
 
 ```
-~/Library/Application Support/sentinel/stores/<project-hash>/
+~/Library/Application Support/forge/stores/<project-hash>/
 ├── events.jsonl                      # append-only; earlier events survive interrupts
 └── objects/sha256/<prefix>/<digest>  # deduplicated, content-addressed payloads
 ```
@@ -97,7 +97,7 @@ Owner-only directories, `0600` files, atomic temp-file-then-rename writes. `<pro
 ## Quick start
 
 ```sh
-npx @orthic-labs/sentinel
+npx @orthic-labs/forge
 
 node cli.js assess --operator --json <<'JSON'
 {"summary":"Fix parser","task_kind":"bugfix","claims":[{"text":"Parser rejects escaped quotes","kind":"behavioral_fact","materiality":"critical"}]}
@@ -107,7 +107,7 @@ JSON
 MCP surface:
 
 ```
-sentinel(operation: assess | checkpoint | verify | close)
+forge(operation: assess | checkpoint | verify | close)
 docs(library, topic, version?, project_root?)
 ```
 
@@ -117,8 +117,8 @@ The bundled `docs` tool is version-aware: it resolves the dependency version fro
 
 ## What's new in 2.x
 
-- Hooks-first enforcement with durable local state; v1 MCP surface replaced by `sentinel` + `docs`.
-- Host token file replaces `SENTINEL_TRUSTED_CALLER`; store moved out of the project tree (legacy `.sentinel/` still read).
+- Hooks-first enforcement with durable local state; v1 MCP surface replaced by `forge` + `docs`.
+- Host token file replaces `FORGE_TRUSTED_CALLER`; store moved out of the project tree (legacy `.forge/` still read).
 - Gate evaluation is rubric-driven: checks must link a criterion and match a CheckSpec; supported claims require a matching evidence class.
 - MCP schema strips model-writable `trust_class` / `executor` / `status` — those fields are issuer-derived now.
 - Stop-event handling distinguishes a conversational pause from completion intent; completion runs verify, then a transactional close.
@@ -128,13 +128,13 @@ The bundled `docs` tool is version-aware: it resolves the dependency version fro
 - It proves the supplied acceptance policy — not the absence of every possible bug.
 - External facts still depend on an available authoritative source.
 - Model-independent enforcement requires the host's hook adapter to be installed.
-- Deprecated v1 tools return migration errors unless `SENTINEL_LEGACY_TOOLS=1` is set temporarily.
+- Deprecated v1 tools return migration errors unless `FORGE_LEGACY_TOOLS=1` is set temporarily.
 
 ## Go deeper
 
 | Doc | What's in it |
 |---|---|
-| [SENTINEL-MASTER.md](SENTINEL-MASTER.md) | Full adjudicated guide — 49 indexed claims |
+| [FORGE-MASTER.md](FORGE-MASTER.md) | Full adjudicated guide — 49 indexed claims |
 | [docs/architecture.md](docs/architecture.md) | Components, data flow, flow-inventory status |
 | [docs/integration-matrix.md](docs/integration-matrix.md) | CLI / MCP / hooks / CI surfaces |
 | [docs/store-migration.md](docs/store-migration.md) | Store layout, host token, rename aliases |
@@ -142,4 +142,4 @@ The bundled `docs` tool is version-aware: it resolves the dependency version fro
 ---
 
 <sub><b><a href="https://orthic-labs.github.io">Orthic Labs</a></b> — local-first infrastructure for AI-assisted development.<br>
-<a href="https://github.com/Orthic-Labs/Membrane">Membrane</a> · <a href="https://github.com/Orthic-Labs/Cortex">Cortex</a> · <a href="https://github.com/Orthic-Labs/Sentinel">Sentinel</a> · <a href="https://github.com/Orthic-Labs/Roundtable">Roundtable</a> · <a href="https://github.com/Orthic-Labs/Morph">Morph</a> · <a href="https://github.com/Orthic-Labs/CutRight">CutRight</a> · <a href="https://github.com/Orthic-Labs/claudecodeX">claudecodeX</a></sub>
+<a href="https://github.com/Orthic-Labs/Membrane">Membrane</a> · <a href="https://github.com/Orthic-Labs/Cortex">Cortex</a> · <a href="https://github.com/Orthic-Labs/Forge">Forge</a> · <a href="https://github.com/Orthic-Labs/Roundtable">Roundtable</a> · <a href="https://github.com/Orthic-Labs/Morph">Morph</a> · <a href="https://github.com/Orthic-Labs/CutRight">CutRight</a> · <a href="https://github.com/Orthic-Labs/claudecodeX">claudecodeX</a></sub>

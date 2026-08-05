@@ -1,6 +1,6 @@
 # Blueprint orientation evidence — hook point
 
-Sentinel accepts Blueprint orientation receipts when present; it does not require Blueprint to ship first.
+Forge accepts Blueprint orientation receipts when present; it does not require Blueprint to ship first.
 
 ## Accepted evidence shapes
 
@@ -35,4 +35,4 @@ core.checkpoint({
 }, 'hook');
 ```
 
-When Blueprint P1 emits a stable receipt schema, map it here without changing Sentinel ops (`assess` / `checkpoint` / `verify` / `close`).
+When Blueprint P1 emits a stable receipt schema, map it here without changing Forge ops (`assess` / `checkpoint` / `verify` / `close`).

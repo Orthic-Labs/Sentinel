@@ -25,7 +25,7 @@ test('Claude tool receipt is hook-issued, typed, and content-free', () => {
     cwd: '/workspace', started_at: '2026-08-01T00:00:00Z', completed_at: '2026-08-01T00:00:01Z',
   });
   assert.equal(receipt.schema, 'orthic.tool-receipt.v1');
-  assert.equal(receipt.issuer_id, 'sentinel-claude-hook');
+  assert.equal(receipt.issuer_id, 'forge-claude-hook');
   assert.match(receipt.issuer_capability_digest, /^sha256:[0-9a-f]{64}$/);
   assert.match(receipt.input_digest, /^sha256:[0-9a-f]{64}$/);
   assert.match(receipt.output_digest, /^sha256:[0-9a-f]{64}$/);
@@ -34,7 +34,7 @@ test('Claude tool receipt is hook-issued, typed, and content-free', () => {
 });
 
 test('Claude tool receipt reuses fresh prompt trace for same session', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'sentinel-active-trace-'));
+  const dir = mkdtempSync(join(tmpdir(), 'forge-active-trace-'));
   const sessionId = 'dace5c62-31e7-4c35-a08d-ab7f00f0b027';
   const key = createHash('sha256').update(sessionId).digest('hex');
   writeFileSync(join(dir, `${key}.json`), JSON.stringify({
@@ -46,7 +46,7 @@ test('Claude tool receipt reuses fresh prompt trace for same session', () => {
 });
 
 test('Claude tool-receipt hook main path emits failure event without runtime error', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'sentinel-tool-receipt-'));
+  const dir = mkdtempSync(join(tmpdir(), 'forge-tool-receipt-'));
   const ingress = join(dir, 'events.jsonl');
   const result = spawnSync(process.execPath, [fileURLToPath(new URL('../hooks/claude-code/tool-receipt.js', import.meta.url))], {
     input: JSON.stringify({ hook_event_name: 'PostToolUseFailure', task_id: 'task-1', turn_id: 'turn-1', tool_call_id: 'call-1', tool_name: 'Bash', error: 'failed', cwd: dir }),

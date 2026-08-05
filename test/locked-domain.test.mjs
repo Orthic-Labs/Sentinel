@@ -10,13 +10,13 @@ const lockedDomain = require('../lib/locked-domain.js');
 const { evaluate } = require('../hooks/generic/hook.js');
 
 function isolatedHost() {
-  const dir = mkdtempSync(join(tmpdir(), 'sentinel-locked-'));
-  process.env.SENTINEL_HOST_DATA = dir;
+  const dir = mkdtempSync(join(tmpdir(), 'forge-locked-'));
+  process.env.FORGE_HOST_DATA = dir;
   return dir;
 }
 
 function project() {
-  const root = mkdtempSync(join(tmpdir(), 'sentinel-locked-proj-'));
+  const root = mkdtempSync(join(tmpdir(), 'forge-locked-proj-'));
   mkdirSync(join(root, 'src'), { recursive: true });
   return root;
 }
@@ -54,10 +54,10 @@ test('arming is idempotent and scoped to its own session', () => {
   assert.deepEqual(lockedDomain.armedDomains('sess-b', root), []);
 });
 
-test('THE REGRESSION: a session that touched a locked path cannot conclude with no Sentinel run', () => {
+test('THE REGRESSION: a session that touched a locked path cannot conclude with no Forge run', () => {
   isolatedHost();
   const root = project();
-  // Turn 1 — reading the file while "running an eval". No Sentinel run is ever opened.
+  // Turn 1 — reading the file while "running an eval". No Forge run is ever opened.
   const reading = evaluate(
     { hook_event_name: 'PostToolUse', session_id: 'sess-7h', tool_input: { file_path: 'crates/kws/src/sherpa_kws.rs' } },
     { projectRoot: root },
@@ -70,7 +70,7 @@ test('THE REGRESSION: a session that touched a locked path cannot conclude with 
     { projectRoot: root },
   );
   assert.equal(signoff.action, 'block');
-  assert.match(signoff.reason, /locked domain requires an active Sentinel run/);
+  assert.match(signoff.reason, /locked domain requires an active Forge run/);
   assert.deepEqual(signoff.locked_domains, ['kws-wake']);
 });
 
@@ -82,7 +82,7 @@ test('an untouched session still reaches the ordinary degraded path, not the loc
     { projectRoot: root },
   );
   assert.equal(result.action, 'enforcement_degraded');
-  assert.equal(result.reason, 'no active sentinel run');
+  assert.equal(result.reason, 'no active forge run');
 });
 
 test('a conversational stop is still not a completion, even in an armed session', () => {
@@ -91,7 +91,7 @@ test('a conversational stop is still not a completion, even in an armed session'
   lockedDomain.observe({ tool_input: { file_path: 'src/sherpa_kws.rs' } }, 'sess-chat', root);
   const result = evaluate({ hook_event_name: 'Stop', session_id: 'sess-chat' }, { projectRoot: root });
   // Without completion intent this must not become a hard block on ordinary conversation.
-  assert.notEqual(result.reason, 'locked domain requires an active Sentinel run before completion');
+  assert.notEqual(result.reason, 'locked domain requires an active Forge run before completion');
 });
 
 test('the domain list is operator-editable without a code change', () => {
