@@ -8,12 +8,15 @@ const childProcess = require('node:child_process');
 const { appendObservableEvent } = require('./observable-ingress.js');
 const { buildObservableEvent } = require('./observable-event.js');
 
-const MAX_PACKET_BYTES = 64 * 1024;
+// Plan 2.2: the rendering core (finalize, constants) lives in Membrane's CJS
+// module. The sentinel hook requires it directly — this eliminates the
+// "two renderers" split where the hook carried a verbatim copy that could
+// drift from the authoritative implementation.
+const rendererLib = require('../../membrane/mcp/context-renderer-lib.cjs');
+const MAX_PACKET_BYTES = rendererLib.MAX_PACKET_BYTES;
+const MAX_CONTEXT_CHARS = rendererLib.MAX_CONTEXT_CHARS;
+const DEFAULT_PACKET_CHAR_BUDGET = rendererLib.DEFAULT_PACKET_CHAR_BUDGET;
 const REQUEST_TIMEOUT_MS = 1500;
-// The door cap for rendered content, and the contract's fixed default packet
-// budget (tools/lib/context_contracts.py rejects any other default).
-const MAX_CONTEXT_CHARS = 30 * 1000;
-const DEFAULT_PACKET_CHAR_BUDGET = 30000;
 
 // Plan convention 3: one typed client identity everywhere. Membrane's rules
 // provider keys self-loading behavior off this exact string
@@ -182,92 +185,10 @@ function runClient(request, root, options = {}) {
 }
 
 // Renders selected blocks into the prompt and accounts for exactly what was
-// rendered. Before this, render() serialized the whole packet — block `text`
-// included — into one JSON blob, so content did reach the model but every block
-// still reported `deliveryStage: "planned"` and `deliveredChars: 0`. That is why
-// the delivered-bytes number read zero for months while bytes were in fact being
-// shipped: the packet was delivered, never finalized. Unaccounted delivery is
-// worse than none, because no budget bounded it and no receipt described it.
-//
-// Content is data, never instruction: every block carries
-// `instructionPolicy: "data_only"`, and the rendered section says so explicitly
-// so that text arriving from a repository cannot be read as a directive.
-function finalize(packet, doorChars) {
-  const blocks = Array.isArray(packet.blocks) ? packet.blocks : [];
-  const budget = (packet.budget && typeof packet.budget === 'object') ? packet.budget : (packet.budget = {});
-  const configured = Number.isInteger(budget.configuredPacketCharBudget)
-    ? budget.configuredPacketCharBudget
-    : (Number.isInteger(budget.packetCharBudgetDefault) ? budget.packetCharBudgetDefault : DEFAULT_PACKET_CHAR_BUDGET);
-  const effective = Math.max(0, Math.min(configured, doorChars));
-  budget.packetCharBudgetDefault = DEFAULT_PACKET_CHAR_BUDGET;
-  budget.configuredPacketCharBudget = configured;
-  budget.effectivePacketCharBudget = effective;
-
-  // Highest priority first, stable within a priority so the same packet always
-  // renders the same way (the cache prefix depends on it).
-  const order = blocks.map((block, index) => ({ block, index }))
-    .sort((left, right) => (Number(right.block.priority || 0) - Number(left.block.priority || 0)) || (left.index - right.index));
-
-  const sections = [];
-  let used = 0;
-  for (const { block } of order) {
-    const text = typeof block.text === 'string' ? block.text.trim() : '';
-    const resolver = typeof block.resolver === 'string' ? block.resolver.trim() : '';
-    let deliveryClass = 'metadata_only';
-    let dropReason = resolver ? 'not_selected' : 'missing_resolver';
-    let deliveredChars = 0;
-
-    if (text) {
-      const fragment = `--- ${block.id || 'block'} (${block.provider || 'federated'}) ---\n${text}`;
-      const candidate = (sections.length ? '\n\n' : '') + fragment;
-      if (used + candidate.length <= effective) {
-        sections.push(fragment);
-        used += candidate.length;
-        deliveredChars = candidate.length;
-        deliveryClass = 'rendered';
-        dropReason = 'none';
-      } else {
-        dropReason = 'packet_budget_exceeded';
-        if (resolver) deliveryClass = 'resolver_backed';
-      }
-    } else if (resolver) {
-      deliveryClass = 'resolver_backed';
-      dropReason = 'none';
-    }
-
-    const selectedTokens = Number(block.selectedTokens ?? block.estimatedTokens ?? 0) || 0;
-    Object.assign(block, {
-      deliveryStage: 'finalized',
-      deliveryClass,
-      selectedTokens,
-      allottedTokens: Number(block.allottedTokens ?? selectedTokens) || 0,
-      renderedTokens: deliveredChars ? Math.ceil(deliveredChars / 4) : 0,
-      deliveredChars,
-      dropReason,
-    });
-  }
-
-  const accounting = {};
-  for (const block of blocks) {
-    const provider = String(block.provider || 'federated');
-    const row = accounting[provider] || (accounting[provider] = {
-      deliveryStage: 'finalized', selectedTokens: 0, renderedTokens: 0, deliveredChars: 0, reasons: [],
-    });
-    row.selectedTokens += Number(block.selectedTokens || 0);
-    row.renderedTokens += Number(block.renderedTokens || 0);
-    row.deliveredChars += Number(block.deliveredChars || 0);
-    row.reasons.push(String(block.dropReason || 'none'));
-  }
-  for (const row of Object.values(accounting)) {
-    const unique = [...new Set(row.reasons)];
-    delete row.reasons;
-    row.dropReason = unique.length === 1 ? unique[0] : 'multiple';
-  }
-  if (Object.keys(accounting).length) packet.providerAccounting = accounting;
-  else delete packet.providerAccounting;
-
-  return { body: sections.join('\n\n'), deliveredChars: used };
-}
+// rendered. Content is data, never instruction: every block carries
+// `instructionPolicy: "data_only"` so repository prose cannot be read as a directive.
+// Delegates to the Membrane CJS lib (plan 2.2) — ONE implementation, never a copy.
+const finalize = rendererLib.finalize;
 
 // Per-session delivery ledger (plan 2.3). SessionStart and UserPromptSubmit both
 // fire this hook in the same session, so an unchanged turn must NOT reship the
